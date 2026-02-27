@@ -70,35 +70,32 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- MOTOR TRIPLE PARA BINANCE ---
+// --- MOTOR ACTUALIZADO PARA BINANCE P2P ---
 window.fetchBinanceOnly = async () => {
     let p2pRate = 0;
 
-    // Intento 1: DolarAPI (Limpio, sin parámetros que puedan bloquear)
-    try {
-        const r1 = await fetch('https://ve.dolarapi.com/v1/dolares/binance');
-        const d1 = await r1.json();
-        if (d1 && d1.promedio) p2pRate = parseFloat(d1.promedio);
-    } catch(e) {}
+    // Los 3 enlaces más estables y actualizados para el P2P de Venezuela
+    const endpoints = [
+        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/page?page=binance',
+        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance',
+        'https://api.pydolarvenezuela.com/api/v1/dollar/unit/binance'
+    ];
 
-    // Intento 2: PyDolarVenezuela (Endpoint Maestro)
-    if (!p2pRate) {
+    for (let url of endpoints) {
+        if (p2pRate > 0) break; // Si ya consiguió el precio, se sale del ciclo
         try {
-            const r2 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar');
-            const d2 = await r2.json();
-            if (d2 && d2.monitors && d2.monitors.binance && d2.monitors.binance.price) {
-                p2pRate = parseFloat(d2.monitors.binance.price);
+            const r = await fetch(url + '&t=' + Date.now()); // Evita que se quede pegado en caché
+            const d = await r.json();
+            
+            // Revisa las diferentes formas en que la API podría enviar la respuesta
+            if (d.monitors && d.monitors.binance && d.monitors.binance.price) {
+                p2pRate = parseFloat(d.monitors.binance.price);
+            } else if (d.price) {
+                p2pRate = parseFloat(d.price);
+            } else if (d.binance && d.binance.price) {
+                p2pRate = parseFloat(d.binance.price);
             }
-        } catch(e) {}
-    }
-
-    // Intento 3: PyDolarVenezuela (Endpoint Directo)
-    if (!p2pRate) {
-        try {
-            const r3 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance');
-            const d3 = await r3.json();
-            if (d3 && d3.price) p2pRate = parseFloat(d3.price);
-        } catch(e) {}
+        } catch(e) { console.warn("Endpoint falló, intentando el siguiente...", url); }
     }
 
     const input = getEl('rateBinance');
@@ -107,10 +104,10 @@ window.fetchBinanceOnly = async () => {
     if (p2pRate > 0) {
         input.value = p2pRate.toFixed(2);
         sync('ratebinance');
-        badge.innerText = "AUTO"; // Se logró conectar
+        badge.innerText = "AUTO"; 
     } else {
-        // Fracaso total de las 3 APIs
-        alert("⚠️ Binance está bloqueando temporalmente el acceso público. Modo MANUAL activado.");
+        // Fallo crítico
+        alert("⚠️ La API de Binance P2P cambió su ruta de acceso. Modo MANUAL activado.");
         isBinanceApi = false;
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
