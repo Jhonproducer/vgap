@@ -70,25 +70,22 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- MOTOR DEFINITIVO: YADIO + RESPALDOS ---
+// --- MOTOR DE BINANCE SILENCIOSO ---
 window.fetchBinanceOnly = async () => {
     let p2pRate = 0;
 
-    // Configuración de múltiples APIs, liderado por Yadio (Internacional)
     const endpoints = [
-        { url: 'https://api.yadio.io/exrates/VES', type: 'yadio' }, // Opcion 1: Yadio (Poderosa, no la bloquean)
-        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance', type: 'pydolar' }, // Opcion 2
-        { url: 'https://ve.dolarapi.com/v1/dolares/binance', type: 'dolarapi' }, // Opcion 3
-        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.yadio.io/exrates/VES'), type: 'yadio' } // Proxy de rescate
+        { url: 'https://api.yadio.io/exrates/VES', type: 'yadio' },
+        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance', type: 'pydolar' },
+        { url: 'https://ve.dolarapi.com/v1/dolares/binance', type: 'dolarapi' },
+        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.yadio.io/exrates/VES'), type: 'yadio' }
     ];
 
     for (let ep of endpoints) {
         try {
-            // El cache: 'no-store' asegura que la operadora no nos mande datos viejos pegados
             const r = await fetch(ep.url + (ep.url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
             const d = await r.json();
             
-            // Analizamos la respuesta dependiendo de la API que respondió
             if (ep.type === 'yadio' && d && d.VES && d.VES.binance) {
                 p2pRate = parseFloat(d.VES.binance);
             } else if (ep.type === 'pydolar' && d && d.price) {
@@ -97,9 +94,8 @@ window.fetchBinanceOnly = async () => {
                 p2pRate = parseFloat(d.promedio);
             }
             
-            // Si capturó el número exitosamente, se sale del ciclo y no busca más
             if (p2pRate > 0) break; 
-        } catch(e) { console.warn("API fallida o bloqueada, intentando la siguiente..."); }
+        } catch(e) { /* Fallo silencioso */ }
     }
 
     const input = getEl('rateBinance');
@@ -110,14 +106,19 @@ window.fetchBinanceOnly = async () => {
         sync('ratebinance');
         badge.innerText = "AUTO"; 
     } else {
-        alert("⚠️ Tu operadora de internet tiene un firewall extremo activo ahora mismo. Te devolvimos al modo MANUAL.");
-        isBinanceApi = false;
-        badge.innerText = "MANUAL";
+        // FALLA ELEGANTE: Muestra "ERROR" un segundo y se rinde sin alertas molestas
+        badge.innerText = "ERROR";
         badge.className = "mode-badge manual-mode";
-        input.disabled = false;
-        input.value = lastManualBinance;
-        sync('ratebinance');
-        input.focus();
+        badge.style.color = "#FF453A"; // Pone las letras rojas un momento
+        
+        setTimeout(() => {
+            isBinanceApi = false;
+            badge.innerText = "MANUAL";
+            badge.style.color = ""; // Devuelve el color normal
+            input.disabled = false;
+            input.value = lastManualBinance;
+            sync('ratebinance');
+        }, 1200);
     }
 };
 
