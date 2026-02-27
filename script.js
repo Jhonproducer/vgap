@@ -1,5 +1,6 @@
 const getEl = (id) => document.getElementById(id);
 
+// Estado independiente para cada tasa
 let isBcvApi = true; 
 let isBinanceApi = false; 
 let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
@@ -70,30 +71,29 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- EL AS BAJO LA MANGA: BUSCADOR GENERAL ---
+// --- SISTEMA ANTI-BLOQUEO (PROXY) PARA BINANCE ---
 window.fetchBinanceOnly = async () => {
     let p2pRate = 0;
 
-    // Intento 1: Llamamos a la lista completa de todas las tasas de Venezuela (es la ruta más estable de la API)
-    try {
-        const r1 = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
-        const data1 = await r1.json();
-        // Filtramos nosotros mismos buscando la palabra "binance"
-        const binanceData = data1.find(moneda => moneda.nombre.toLowerCase().includes('binance'));
-        if (binanceData && binanceData.promedio) {
-            p2pRate = parseFloat(binanceData.promedio);
-        }
-    } catch(e) { console.warn("Fallo la lista general de DolarApi"); }
+    // Arsenal de enlaces: Directos + Proxies Internacionales para burlar bloqueos ISP
+    const endpoints = [
+        'https://ve.dolarapi.com/v1/dolares/binance', // Directo oficial
+        'https://pydolarve.org/api/v1/dollar/unit/binance', // Directo alterno
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ve.dolarapi.com/v1/dolares/binance'), // Túnel Proxy 1
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarve.org/api/v1/dollar/unit/binance') // Túnel Proxy 2
+    ];
 
-    // Intento 2: Si lo anterior falla, vamos a la lista maestra de PyDolarVenezuela
-    if (!p2pRate) {
+    for (let url of endpoints) {
         try {
-            const r2 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=binance&t=' + Date.now());
-            const d2 = await r2.json();
-            if (d2 && d2.monitors && d2.monitors.binance && d2.monitors.binance.price) {
-                p2pRate = parseFloat(d2.monitors.binance.price);
-            }
-        } catch(e) { console.warn("Fallo PyDolarVenezuela"); }
+            // Se usa cache:'no-store' para que siempre traiga datos frescos 
+            const r = await fetch(url, { cache: 'no-store' });
+            const d = await r.json();
+            
+            if (d && d.promedio) { p2pRate = parseFloat(d.promedio); } 
+            else if (d && d.price) { p2pRate = parseFloat(d.price); }
+            
+            if (p2pRate > 0) break; // Si burla el bloqueo y encuentra el precio, aborta el ciclo y sigue
+        } catch(e) { console.warn("Ruta bloqueada por operadora, intentando túnel alterno...", url); }
     }
 
     const input = getEl('rateBinance');
@@ -102,10 +102,9 @@ window.fetchBinanceOnly = async () => {
     if (p2pRate > 0) {
         input.value = p2pRate.toFixed(2);
         sync('ratebinance');
-        badge.innerText = "AUTO"; // ¡Éxito!
+        badge.innerText = "AUTO"; 
     } else {
-        // Fracaso total
-        alert("⚠️ Binance sigue bloqueando el acceso público a las APIs. Te hemos devuelto al modo MANUAL.");
+        alert("⚠️ La operadora de internet tiene un bloqueo total severo. Te devolvimos al modo MANUAL.");
         isBinanceApi = false;
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
