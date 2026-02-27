@@ -1,19 +1,22 @@
 const getEl = (id) => document.getElementById(id);
 
 let isBcvApi = true; 
-let isBinanceApi = false; 
 let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
 
-const moonSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
-const sunSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
-
+// Cambio de Tema Textual
 window.toggleTheme = () => {
-    const isLight = document.body.getAttribute('data-theme') === 'light';
-    document.body.setAttribute('data-theme', isLight ? 'dark' : 'light');
-    getEl('themeBtn').innerHTML = isLight ? moonSvg : sunSvg;
+    // Como el default es blanco, verificamos si está activo el oscuro
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    
+    // Cambia el texto para que quede clarito
+    getEl('themeBtn').innerText = isDark ? "MODO: CLARO" : "MODO: OSCURO";
+    
+    // Cambia el color del top bar en móviles
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#F2F2F7' : '#000000');
 };
 
-// --- LÓGICA BCV ---
+// --- LÓGICA BCV (MANTENIDA INTACTA) ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -36,27 +39,6 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- LÓGICA BINANCE ---
-window.toggleBinance = async () => {
-    isBinanceApi = !isBinanceApi;
-    const badge = getEl('badgeBinance');
-    const input = getEl('rateBinance');
-    
-    if (isBinanceApi) {
-        badge.innerText = "...";
-        badge.className = "mode-badge api-binance";
-        input.disabled = true;
-        await fetchBinanceOnly(); 
-    } else {
-        badge.innerText = "MANUAL";
-        badge.className = "mode-badge manual-mode";
-        input.disabled = false;
-        input.value = lastManualBinance;
-        sync('ratebinance');
-        input.focus();
-    }
-};
-
 window.fetchBcvOnly = async () => {
     try {
         const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
@@ -70,65 +52,14 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- MOTOR DE BINANCE SILENCIOSO ---
-window.fetchBinanceOnly = async () => {
-    let p2pRate = 0;
-
-    const endpoints = [
-        { url: 'https://api.yadio.io/exrates/VES', type: 'yadio' },
-        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance', type: 'pydolar' },
-        { url: 'https://ve.dolarapi.com/v1/dolares/binance', type: 'dolarapi' },
-        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.yadio.io/exrates/VES'), type: 'yadio' }
-    ];
-
-    for (let ep of endpoints) {
-        try {
-            const r = await fetch(ep.url + (ep.url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
-            const d = await r.json();
-            
-            if (ep.type === 'yadio' && d && d.VES && d.VES.binance) {
-                p2pRate = parseFloat(d.VES.binance);
-            } else if (ep.type === 'pydolar' && d && d.price) {
-                p2pRate = parseFloat(d.price);
-            } else if (ep.type === 'dolarapi' && d && d.promedio) {
-                p2pRate = parseFloat(d.promedio);
-            }
-            
-            if (p2pRate > 0) break; 
-        } catch(e) { /* Fallo silencioso */ }
-    }
-
-    const input = getEl('rateBinance');
-    const badge = getEl('badgeBinance');
-
-    if (p2pRate > 0) {
-        input.value = p2pRate.toFixed(2);
-        sync('ratebinance');
-        badge.innerText = "AUTO"; 
-    } else {
-        // FALLA ELEGANTE: Muestra "ERROR" un segundo y se rinde sin alertas molestas
-        badge.innerText = "ERROR";
-        badge.className = "mode-badge manual-mode";
-        badge.style.color = "#FF453A"; // Pone las letras rojas un momento
-        
-        setTimeout(() => {
-            isBinanceApi = false;
-            badge.innerText = "MANUAL";
-            badge.style.color = ""; // Devuelve el color normal
-            input.disabled = false;
-            input.value = lastManualBinance;
-            sync('ratebinance');
-        }, 1200);
-    }
-};
-
 window.onload = () => {
+    // Carga la última tasa de binance guardada y busca el BCV
     getEl('rateBinance').value = lastManualBinance;
     fetchBcvOnly();
     
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
-            if(id === 'rateBinance' && !isBinanceApi) {
+            if(id === 'rateBinance') {
                 const val = e.target.value;
                 if(val && parseFloat(val) > 0) {
                     lastManualBinance = val;
