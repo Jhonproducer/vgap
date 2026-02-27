@@ -1,11 +1,9 @@
 const getEl = (id) => document.getElementById(id);
 
-// Estado de la aplicación
-let isBcvApi = true; // Arranca en API
-let isBinanceApi = false; // Arranca en Manual
+let isBcvApi = true; 
+let isBinanceApi = false; 
 let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
 
-// Iconos vectoriales
 const moonSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
 const sunSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
 
@@ -15,7 +13,7 @@ window.toggleTheme = () => {
     getEl('themeBtn').innerHTML = isLight ? moonSvg : sunSvg;
 };
 
-// --- CONTROL DE ETIQUETA BCV ---
+// --- LÓGICA BCV ---
 window.toggleBcv = () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -23,13 +21,13 @@ window.toggleBcv = () => {
     const container = getEl('bcvContainer');
     
     if (isBcvApi) {
-        badge.innerText = "AUTO: API";
+        badge.innerText = "AUTO";
         badge.className = "mode-badge api-bcv";
         input.disabled = true;
         container.classList.remove('unlocked');
         fetchBcvOnly();
     } else {
-        badge.innerText = "MODO: MANUAL";
+        badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
         container.classList.add('unlocked');
@@ -37,20 +35,20 @@ window.toggleBcv = () => {
     }
 };
 
-// --- CONTROL DE ETIQUETA BINANCE ---
+// --- LÓGICA BINANCE ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
     
     if (isBinanceApi) {
-        badge.innerText = "CARGANDO...";
+        badge.innerText = "...";
         badge.className = "mode-badge api-binance";
         input.disabled = true;
         await fetchBinanceOnly();
-        badge.innerText = "AUTO: API";
+        badge.innerText = "AUTO"; // Trae la API y queda fijo
     } else {
-        badge.innerText = "MODO: MANUAL";
+        badge.innerText = "MANUAL"; // Libera la caja y trae tu número
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
         input.value = lastManualBinance;
@@ -59,7 +57,6 @@ window.toggleBinance = async () => {
     }
 };
 
-// Buscadores API Separados para no interferir entre ellos
 window.fetchBcvOnly = async () => {
     try {
         const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
@@ -82,10 +79,9 @@ window.fetchBinanceOnly = async () => {
     } catch (e) { console.error("Error API Binance"); }
 };
 
-// Inicialización de la App
 window.onload = () => {
     getEl('rateBinance').value = lastManualBinance;
-    fetchBcvOnly(); // Arranca buscando el BCV real
+    fetchBcvOnly();
     
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
