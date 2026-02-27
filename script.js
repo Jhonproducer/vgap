@@ -70,32 +70,30 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- MOTOR ACTUALIZADO PARA BINANCE P2P ---
+// --- EL AS BAJO LA MANGA: BUSCADOR GENERAL ---
 window.fetchBinanceOnly = async () => {
     let p2pRate = 0;
 
-    // Los 3 enlaces más estables y actualizados para el P2P de Venezuela
-    const endpoints = [
-        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/page?page=binance',
-        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance',
-        'https://api.pydolarvenezuela.com/api/v1/dollar/unit/binance'
-    ];
+    // Intento 1: Llamamos a la lista completa de todas las tasas de Venezuela (es la ruta más estable de la API)
+    try {
+        const r1 = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
+        const data1 = await r1.json();
+        // Filtramos nosotros mismos buscando la palabra "binance"
+        const binanceData = data1.find(moneda => moneda.nombre.toLowerCase().includes('binance'));
+        if (binanceData && binanceData.promedio) {
+            p2pRate = parseFloat(binanceData.promedio);
+        }
+    } catch(e) { console.warn("Fallo la lista general de DolarApi"); }
 
-    for (let url of endpoints) {
-        if (p2pRate > 0) break; // Si ya consiguió el precio, se sale del ciclo
+    // Intento 2: Si lo anterior falla, vamos a la lista maestra de PyDolarVenezuela
+    if (!p2pRate) {
         try {
-            const r = await fetch(url + '&t=' + Date.now()); // Evita que se quede pegado en caché
-            const d = await r.json();
-            
-            // Revisa las diferentes formas en que la API podría enviar la respuesta
-            if (d.monitors && d.monitors.binance && d.monitors.binance.price) {
-                p2pRate = parseFloat(d.monitors.binance.price);
-            } else if (d.price) {
-                p2pRate = parseFloat(d.price);
-            } else if (d.binance && d.binance.price) {
-                p2pRate = parseFloat(d.binance.price);
+            const r2 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=binance&t=' + Date.now());
+            const d2 = await r2.json();
+            if (d2 && d2.monitors && d2.monitors.binance && d2.monitors.binance.price) {
+                p2pRate = parseFloat(d2.monitors.binance.price);
             }
-        } catch(e) { console.warn("Endpoint falló, intentando el siguiente...", url); }
+        } catch(e) { console.warn("Fallo PyDolarVenezuela"); }
     }
 
     const input = getEl('rateBinance');
@@ -104,10 +102,10 @@ window.fetchBinanceOnly = async () => {
     if (p2pRate > 0) {
         input.value = p2pRate.toFixed(2);
         sync('ratebinance');
-        badge.innerText = "AUTO"; 
+        badge.innerText = "AUTO"; // ¡Éxito!
     } else {
-        // Fallo crítico
-        alert("⚠️ La API de Binance P2P cambió su ruta de acceso. Modo MANUAL activado.");
+        // Fracaso total
+        alert("⚠️ Binance sigue bloqueando el acceso público a las APIs. Te hemos devuelto al modo MANUAL.");
         isBinanceApi = false;
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
