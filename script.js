@@ -1,5 +1,8 @@
 const getEl = (id) => document.getElementById(id);
 
+// Memoria inteligente: guarda tu última tasa manual
+let lastManualRate = localStorage.getItem('vgap_binance') || "610.80";
+
 window.toggleTheme = () => {
     const isLight = document.body.getAttribute('data-theme') === 'light';
     document.body.setAttribute('data-theme', isLight ? 'dark' : 'light');
@@ -24,7 +27,26 @@ window.fetchRates = async () => {
         getEl('lastUpdate').innerText = `Actualizado: ${formattedDate} VEN`;
         
         sync('ratebcv');
-    } catch (e) { console.error("Error API"); }
+    } catch (e) { console.error("Error API BCV"); }
+};
+
+// NUEVO: Traer tasa de Binance por API
+window.fetchBinance = async () => {
+    const btn = getEl('btnBinFetch');
+    btn.classList.add('spinning');
+    try {
+        const res = await fetch('https://ve.dolarapi.com/v1/dolares/binance?t=' + Date.now());
+        const data = await res.json();
+        getEl('rateBinance').value = parseFloat(data.promedio).toFixed(2);
+        sync('ratebinance');
+    } catch (e) { console.error("Error API Binance"); }
+    setTimeout(() => btn.classList.remove('spinning'), 500);
+};
+
+// NUEVO: Botón de reversa (Undo)
+window.undoBinance = () => {
+    getEl('rateBinance').value = lastManualRate;
+    sync('ratebinance');
 };
 
 const sync = (origin) => {
@@ -59,11 +81,18 @@ const updateUI = () => {
 };
 
 window.onload = () => {
-    getEl('rateBinance').value = localStorage.getItem('vgap_binance') || "610.80";
+    getEl('rateBinance').value = lastManualRate;
     fetchRates();
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
-            if(id === 'rateBinance') localStorage.setItem('vgap_binance', e.target.value);
+            // Guardar en memoria si es Binance y es un número válido
+            if(id === 'rateBinance') {
+                const val = e.target.value;
+                if(val && parseFloat(val) > 0) {
+                    lastManualRate = val;
+                    localStorage.setItem('vgap_binance', val);
+                }
+            }
             sync(id.replace('input', '').toLowerCase());
         });
     });
