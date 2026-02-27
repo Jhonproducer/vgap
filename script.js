@@ -1,9 +1,11 @@
 const getEl = (id) => document.getElementById(id);
 
+// Estado independiente para cada tasa
 let isBcvApi = true; 
 let isBinanceApi = false; 
 let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
 
+// Iconos limpios para el modo oscuro
 const moonSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
 const sunSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
 
@@ -13,19 +15,20 @@ window.toggleTheme = () => {
     getEl('themeBtn').innerHTML = isLight ? moonSvg : sunSvg;
 };
 
-// --- LÓGICA BCV ---
-window.toggleBcv = () => {
+// --- LÓGICA BCV PERFECTA ---
+window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
     const container = getEl('bcvContainer');
     
     if (isBcvApi) {
-        badge.innerText = "AUTO";
+        badge.innerText = "...";
         badge.className = "mode-badge api-bcv";
         input.disabled = true;
         container.classList.remove('unlocked');
-        fetchBcvOnly();
+        await fetchBcvOnly();
+        badge.innerText = "AUTO";
     } else {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
@@ -35,7 +38,7 @@ window.toggleBcv = () => {
     }
 };
 
-// --- LÓGICA BINANCE ---
+// --- LÓGICA BINANCE BLINDADA ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
@@ -45,18 +48,18 @@ window.toggleBinance = async () => {
         badge.innerText = "...";
         badge.className = "mode-badge api-binance";
         input.disabled = true;
-        await fetchBinanceOnly();
-        badge.innerText = "AUTO"; // Trae la API y queda fijo
+        await fetchBinanceOnly(); // Va a la API
     } else {
-        badge.innerText = "MANUAL"; // Libera la caja y trae tu número
+        badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
-        input.value = lastManualBinance;
+        input.value = lastManualBinance; // Te devuelve el tuyo instantáneo
         sync('ratebinance');
         input.focus();
     }
 };
 
+// Buscador API BCV
 window.fetchBcvOnly = async () => {
     try {
         const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
@@ -70,21 +73,60 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
+// Buscador API Binance Doble-Filtro
 window.fetchBinanceOnly = async () => {
+    let success = false;
+    let p2pRate = 0;
+
+    // Intento 1: API PyDolarVenezuela (La más precisa para P2P en Vzla)
     try {
-        const res = await fetch('https://ve.dolarapi.com/v1/dolares/binance?t=' + Date.now());
-        const data = await res.json();
-        getEl('rateBinance').value = parseFloat(data.promedio).toFixed(2);
+        const res1 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance');
+        const data1 = await res1.json();
+        if (data1 && data1.price) {
+            p2pRate = parseFloat(data1.price);
+            success = true;
+        }
+    } catch (e) {}
+
+    // Intento 2: DolarApi (Respaldo por si la primera se cae)
+    if (!success) {
+        try {
+            const res2 = await fetch('https://ve.dolarapi.com/v1/dolares/binance?t=' + Date.now());
+            const data2 = await res2.json();
+            if (data2 && data2.promedio) {
+                p2pRate = parseFloat(data2.promedio);
+                success = true;
+            }
+        } catch (e) {}
+    }
+
+    const input = getEl('rateBinance');
+    const badge = getEl('badgeBinance');
+
+    if (success && p2pRate > 0) {
+        input.value = p2pRate.toFixed(2);
         sync('ratebinance');
-    } catch (e) { console.error("Error API Binance"); }
+        badge.innerText = "AUTO"; // ¡Éxito total, se queda en AUTO!
+    } else {
+        // SI TODO FALLA: No se congela, te devuelve a manual y te avisa.
+        alert("⚠️ La API de Binance está saturada o no responde. Te hemos devuelto al modo MANUAL.");
+        isBinanceApi = false;
+        badge.innerText = "MANUAL";
+        badge.className = "mode-badge manual-mode";
+        input.disabled = false;
+        input.value = lastManualBinance;
+        sync('ratebinance');
+    }
 };
 
+// Arranque de la App
 window.onload = () => {
     getEl('rateBinance').value = lastManualBinance;
-    fetchBcvOnly();
+    fetchBcvOnly(); // Arranca con el BCV real por defecto
     
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
+            // Guarda tu número en la memoria oculta SOLO si estás en manual
             if(id === 'rateBinance' && !isBinanceApi) {
                 const val = e.target.value;
                 if(val && parseFloat(val) > 0) {
