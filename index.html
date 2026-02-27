@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.json">
+    
     <title>V-Gap Ultra</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -58,6 +63,10 @@
           </svg>
           BINANCE ⓘ <span class="tooltiptext">Tasa P2P Venta USDT.</span>
         </label>
+        <div class="controls">
+          <button class="icon-btn tooltip" id="btnBinFetch" onclick="fetchBinance()">↺ <span class="tooltiptext">Tasa API Binance</span></button>
+          <button class="icon-btn tooltip" onclick="undoBinance()">↩️ <span class="tooltiptext">Volver a tu tasa</span></button>
+        </div>
       </div>
       <input type="number" id="rateBinance" inputmode="decimal" step="0.01">
     </div>
