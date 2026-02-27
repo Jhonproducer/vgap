@@ -1,9 +1,8 @@
 const getEl = (id) => document.getElementById(id);
 
-// Memoria inteligente: guarda tu última tasa manual de Binance
+// Memoria inteligente
 let lastManualRate = localStorage.getItem('vgap_binance') || "610.80";
 
-// Iconos vectoriales para el botón de tema (Sin Emojis)
 const moonSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>';
 const sunSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>';
 
@@ -13,27 +12,35 @@ window.toggleTheme = () => {
     getEl('themeBtn').innerHTML = isLight ? moonSvg : sunSvg;
 };
 
-// Botón Desplazable BCV
+// BOTÓN BCV: API vs Manual
 window.toggleBcvMode = () => {
     const isAuto = getEl('bcvSwitch').checked;
-    const bcv = getEl('rateBcv');
-    bcv.disabled = isAuto;
-    getEl('bcvContainer').classList.toggle('unlocked', !isAuto);
-    if (isAuto) fetchRates();
+    const bcvInput = getEl('rateBcv');
+    
+    if (isAuto) {
+        bcvInput.disabled = true;
+        getEl('bcvContainer').classList.remove('unlocked');
+        fetchRates();
+    } else {
+        bcvInput.disabled = false;
+        getEl('bcvContainer').classList.add('unlocked');
+        bcvInput.focus(); // Te pone el cursor de una vez
+    }
 };
 
-// Botón Desplazable BINANCE (Auto vs Manual)
+// BOTÓN BINANCE: API vs Manual
 window.toggleBinanceMode = async () => {
     const isAuto = getEl('binanceSwitch').checked;
     const binInput = getEl('rateBinance');
     
-    binInput.disabled = isAuto;
-    
     if (isAuto) {
-        await window.fetchBinance(); // Si enciendes el switch, trae el promedio API
+        binInput.disabled = true;
+        await window.fetchBinance(); 
     } else {
-        binInput.value = lastManualRate; // Si lo apagas, devuelve tu número escrito
+        binInput.disabled = false;
+        binInput.value = lastManualRate; 
         sync('ratebinance');
+        binInput.focus(); // Te pone el cursor de una vez
     }
 };
 
@@ -62,7 +69,7 @@ window.fetchBinance = async () => {
         const data = await res.json();
         binInput.value = parseFloat(data.promedio).toFixed(2);
         
-        // Activar el switch automáticamente si usas la flechita
+        // Cierra el switch automáticamente si tocas la flechita
         binInput.disabled = true;
         binSwitch.checked = true;
         
@@ -107,7 +114,6 @@ window.onload = () => {
     fetchRates();
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
-            // Guarda tu número manual automáticamente
             if(id === 'rateBinance') {
                 const val = e.target.value;
                 if(val && parseFloat(val) > 0) {
