@@ -1,6 +1,5 @@
 const getEl = (id) => document.getElementById(id);
 
-// Estado independiente para cada tasa
 let isBcvApi = true; 
 let isBinanceApi = false; 
 let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
@@ -71,29 +70,36 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
-// --- SISTEMA ANTI-BLOQUEO (PROXY) PARA BINANCE ---
+// --- MOTOR DEFINITIVO: YADIO + RESPALDOS ---
 window.fetchBinanceOnly = async () => {
     let p2pRate = 0;
 
-    // Arsenal de enlaces: Directos + Proxies Internacionales para burlar bloqueos ISP
+    // Configuración de múltiples APIs, liderado por Yadio (Internacional)
     const endpoints = [
-        'https://ve.dolarapi.com/v1/dolares/binance', // Directo oficial
-        'https://pydolarve.org/api/v1/dollar/unit/binance', // Directo alterno
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ve.dolarapi.com/v1/dolares/binance'), // Túnel Proxy 1
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarve.org/api/v1/dollar/unit/binance') // Túnel Proxy 2
+        { url: 'https://api.yadio.io/exrates/VES', type: 'yadio' }, // Opcion 1: Yadio (Poderosa, no la bloquean)
+        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance', type: 'pydolar' }, // Opcion 2
+        { url: 'https://ve.dolarapi.com/v1/dolares/binance', type: 'dolarapi' }, // Opcion 3
+        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://api.yadio.io/exrates/VES'), type: 'yadio' } // Proxy de rescate
     ];
 
-    for (let url of endpoints) {
+    for (let ep of endpoints) {
         try {
-            // Se usa cache:'no-store' para que siempre traiga datos frescos 
-            const r = await fetch(url, { cache: 'no-store' });
+            // El cache: 'no-store' asegura que la operadora no nos mande datos viejos pegados
+            const r = await fetch(ep.url + (ep.url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
             const d = await r.json();
             
-            if (d && d.promedio) { p2pRate = parseFloat(d.promedio); } 
-            else if (d && d.price) { p2pRate = parseFloat(d.price); }
+            // Analizamos la respuesta dependiendo de la API que respondió
+            if (ep.type === 'yadio' && d && d.VES && d.VES.binance) {
+                p2pRate = parseFloat(d.VES.binance);
+            } else if (ep.type === 'pydolar' && d && d.price) {
+                p2pRate = parseFloat(d.price);
+            } else if (ep.type === 'dolarapi' && d && d.promedio) {
+                p2pRate = parseFloat(d.promedio);
+            }
             
-            if (p2pRate > 0) break; // Si burla el bloqueo y encuentra el precio, aborta el ciclo y sigue
-        } catch(e) { console.warn("Ruta bloqueada por operadora, intentando túnel alterno...", url); }
+            // Si capturó el número exitosamente, se sale del ciclo y no busca más
+            if (p2pRate > 0) break; 
+        } catch(e) { console.warn("API fallida o bloqueada, intentando la siguiente..."); }
     }
 
     const input = getEl('rateBinance');
@@ -104,13 +110,14 @@ window.fetchBinanceOnly = async () => {
         sync('ratebinance');
         badge.innerText = "AUTO"; 
     } else {
-        alert("⚠️ La operadora de internet tiene un bloqueo total severo. Te devolvimos al modo MANUAL.");
+        alert("⚠️ Tu operadora de internet tiene un firewall extremo activo ahora mismo. Te devolvimos al modo MANUAL.");
         isBinanceApi = false;
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
         input.value = lastManualBinance;
         sync('ratebinance');
+        input.focus();
     }
 };
 
