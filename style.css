@@ -1,11 +1,14 @@
+/* BLANCO POR DEFECTO */
 :root {
-  --bg: #000000; --card: #1C1C1E; --border: #333335;
-  --text: #FFFFFF; --text-dim: #8E8E93;
-  --blue: #0A84FF; --orange: #FF9F0A; --green: #32D74B;
-}
-[data-theme="light"] {
   --bg: #F2F2F7; --card: #FFFFFF; --border: #D1D1D6;
   --text: #000000; --text-dim: #636366;
+  --blue: #0A84FF; --orange: #FF9F0A; --green: #32D74B;
+}
+
+/* OSCURO AL ACTIVARSE */
+[data-theme="dark"] {
+  --bg: #000000; --card: #1C1C1E; --border: #333335;
+  --text: #FFFFFF; --text-dim: #8E8E93;
 }
 
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -83,9 +86,18 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .theme-toggle, .icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); display: flex; align-items: center; justify-content: center; padding: 0; }
 .btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
-/* ---------------------------------------------------
-   NUEVO DISEÑO DE ALTA GAMA: SMART BADGES (CORREGIDO)
------------------------------------------------------ */
+/* BOTÓN DE TEXTO DEL MODO */
+.mode-text-btn {
+  font-size: 9px;
+  font-weight: 900;
+  background: var(--border);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  transition: 0.3s;
+}
+
 .mode-badge {
   font-size: 10px;
   font-weight: 800;
@@ -98,7 +110,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  white-space: nowrap; /* CRUCIAL: Evita que el texto se deforme o baje de línea */
+  white-space: nowrap; 
 }
 .api-bcv { background: var(--blue); color: white; box-shadow: 0 0 8px rgba(10, 132, 255, 0.4); }
 .api-binance { background: var(--orange); color: black; box-shadow: 0 0 8px rgba(255, 159, 10, 0.4); }
