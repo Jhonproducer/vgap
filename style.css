@@ -80,23 +80,35 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .factor-text { color: var(--orange); font-size: 10px; font-weight: bold; margin-top: 2px; text-align: right; }
 .timestamp { font-size: 10px; color: var(--text-dim); font-weight: bold; }
 
-.controls { display: flex; align-items: center; gap: 8px; }
-.icon-btn, .theme-toggle, .icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); font-size: 15px; display: flex; align-items: center; justify-content: center; }
-
-/* DISEÑO DE BOTONES DESPLAZABLES (TOGGLE SWITCH) iOS */
-.switch { position: relative; display: inline-block; width: 34px; height: 18px; margin-left: 2px; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .3s; border-radius: 34px; }
-.slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-input:checked + .slider { background-color: var(--blue); }
-input:checked + .slider:before { transform: translateX(16px); }
-
-/* ANIMACIÓN DE CARGA PARA LA API */
-.icon-btn.spinning svg { animation: spin 0.6s linear; pointer-events: none; }
-@keyframes spin { 100% { transform: rotate(360deg); } }
-
+.controls { display: flex; gap: 12px; }
+.icon-btn, .theme-toggle, .icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); font-size: 15px; }
 .btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
 .tooltip { position: relative; cursor: help; }
 .tooltiptext { visibility: hidden; width: 130px; background: #3A3A3C; color: white; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 130%; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: normal; opacity: 0; transition: 0.2s; border: 1px solid #555; }
 .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+
+/* NUEVOS BOTONES CHIQUITOS (API vs MANUAL) */
+.btn-mode { 
+  background: var(--border); 
+  color: var(--text-dim); 
+  border: none; 
+  padding: 5px 10px; 
+  border-radius: 6px; 
+  font-size: 8px; 
+  font-weight: 900; 
+  text-transform: uppercase; 
+  cursor: pointer; 
+  transition: 0.3s; 
+  letter-spacing: 0.5px; 
+}
+.btn-mode.active { 
+  background: var(--blue); 
+  color: white; 
+  box-shadow: 0 0 8px rgba(10, 132, 255, 0.4); 
+}
+.btn-mode.binance-mode.active { 
+  background: var(--orange); 
+  color: black; 
+  box-shadow: 0 0 8px rgba(255, 159, 10, 0.4); 
+}
