@@ -83,35 +83,26 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .factor-text { color: var(--orange); font-size: 10px; font-weight: bold; margin-top: 2px; text-align: right; }
 .timestamp { font-size: 10px; color: var(--text-dim); font-weight: bold; }
 
-.theme-toggle, .icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); display: flex; align-items: center; justify-content: center; padding: 0; }
+.icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); display: flex; align-items: center; justify-content: center; padding: 0; }
 .btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
-/* BOTÓN DE TEXTO DEL MODO */
-.mode-text-btn {
-  font-size: 9px;
-  font-weight: 900;
-  background: var(--border);
-  color: var(--text);
-  padding: 5px 10px;
-  border-radius: 6px;
-  letter-spacing: 0.5px;
-  transition: 0.3s;
-}
+/* ---------------------------------------------------
+   EL NUEVO INTERRUPTOR BRUTAL (TEMA)
+----------------------------------------------------- */
+.theme-switch { position: relative; display: inline-block; width: 62px; height: 30px; }
+.theme-switch input { opacity: 0; width: 0; height: 0; }
+.slider-theme { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #D1D1D6; transition: .4s; border-radius: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+.slider-theme:before { position: absolute; content: ""; height: 24px; width: 24px; left: 3px; bottom: 3px; background-color: white; transition: .4s cubic-bezier(0.68, -0.55, 0.265, 1.55); border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 2; }
+input:checked + .slider-theme { background-color: #1C1C1E; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+input:checked + .slider-theme:before { transform: translateX(32px); background-color: #333335; }
 
-.mode-badge {
-  font-size: 10px;
-  font-weight: 800;
-  padding: 5px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  letter-spacing: 0.5px;
-  user-select: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap; 
-}
+.icon-sun { width: 15px; height: 15px; color: #FF9F0A; z-index: 1; transition: 0.3s; }
+.icon-moon { width: 14px; height: 14px; color: #8E8E93; z-index: 1; transition: 0.3s; }
+input:checked + .slider-theme .icon-moon { color: #FFFFFF; }
+input:checked + .slider-theme .icon-sun { color: #636366; }
+
+/* ETIQUETAS INTELIGENTES */
+.mode-badge { font-size: 10px; font-weight: 800; padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; letter-spacing: 0.5px; user-select: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 .api-bcv { background: var(--blue); color: white; box-shadow: 0 0 8px rgba(10, 132, 255, 0.4); }
 .manual-mode { background: var(--border); color: var(--text); opacity: 0.9; }
 
