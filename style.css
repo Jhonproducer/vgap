@@ -113,7 +113,6 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
   white-space: nowrap; 
 }
 .api-bcv { background: var(--blue); color: white; box-shadow: 0 0 8px rgba(10, 132, 255, 0.4); }
-.api-binance { background: var(--orange); color: black; box-shadow: 0 0 8px rgba(255, 159, 10, 0.4); }
 .manual-mode { background: var(--border); color: var(--text); opacity: 0.9; }
 
 .tooltip { position: relative; cursor: help; }
