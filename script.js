@@ -1,22 +1,22 @@
 const getEl = (id) => document.getElementById(id);
 
 let isBcvApi = true; 
-let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
+let lastSavedBinance = localStorage.getItem('vgap_binance') || "610.80";
 
-// Cambio de Tema Textual
+// Cambio de Tema con Texto Explicito
 window.toggleTheme = () => {
-    // Como el default es blanco, verificamos si está activo el oscuro
+    // Revisa si el modo oscuro está activo (porque el blanco es el default ahora)
     const isDark = document.body.getAttribute('data-theme') === 'dark';
     document.body.setAttribute('data-theme', isDark ? 'light' : 'dark');
     
-    // Cambia el texto para que quede clarito
+    // Cambia el texto del botón
     getEl('themeBtn').innerText = isDark ? "MODO: CLARO" : "MODO: OSCURO";
     
-    // Cambia el color del top bar en móviles
+    // Cambia el color del top bar en celulares
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#F2F2F7' : '#000000');
 };
 
-// --- LÓGICA BCV (MANTENIDA INTACTA) ---
+// --- LÓGICA BCV (Se mantiene su API porque esa sí sirve) ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -52,20 +52,43 @@ window.fetchBcvOnly = async () => {
     } catch (e) { console.error("Error API BCV"); }
 };
 
+// --- EL SALVAVIDAS DE BINANCE (BOTÓN DESHACER) ---
+window.restoreBinance = () => {
+    const input = getEl('rateBinance');
+    const badge = getEl('badgeBinance');
+    
+    // Devuelve el valor a la última tasa guardada
+    input.value = lastSavedBinance;
+    sync('ratebinance');
+    
+    // Efecto visual para que sepas que se restauró
+    badge.innerText = "¡LISTO!";
+    badge.style.background = "var(--green)";
+    badge.style.color = "black";
+    
+    setTimeout(() => {
+        badge.innerText = "DESHACER";
+        badge.style.background = ""; // Vuelve a su color normal de css
+        badge.style.color = "";
+    }, 1000);
+};
+
 window.onload = () => {
-    // Carga la última tasa de binance guardada y busca el BCV
-    getEl('rateBinance').value = lastManualBinance;
+    getEl('rateBinance').value = lastSavedBinance;
     fetchBcvOnly();
     
+    // TRUCO: Solo guardamos la tasa de Binance permanentemente cuando terminas de escribir y tocas fuera de la caja (evento 'blur')
+    getEl('rateBinance').addEventListener('blur', (e) => {
+        const val = e.target.value;
+        if(val && parseFloat(val) > 0) {
+            lastSavedBinance = val;
+            localStorage.setItem('vgap_binance', val);
+        }
+    });
+    
+    // Mientras escribes, solo sincronizamos los cálculos en vivo, pero no sobreescribimos la memoria
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
-            if(id === 'rateBinance') {
-                const val = e.target.value;
-                if(val && parseFloat(val) > 0) {
-                    lastManualBinance = val;
-                    localStorage.setItem('vgap_binance', val);
-                }
-            }
             sync(id.replace('input', '').toLowerCase());
         });
     });
