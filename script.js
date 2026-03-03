@@ -3,11 +3,9 @@ const getEl = (id) => document.getElementById(id);
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
+// Memoria para el auto-deshacer manual
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
-
-// Variable para guardar el gráfico y poder borrarlo/redibujarlo
-let historicalChartInstance = null;
 
 // --- PANTALLA DE BIENVENIDA Y TEMA ---
 window.startApp = (theme) => {
@@ -17,7 +15,7 @@ window.startApp = (theme) => {
     localStorage.setItem('vgap_theme_saved', theme);
     
     getEl('welcomeScreen').classList.add('hidden');
-    getEl('mainApp').style.opacity = '1';
+    getEl('mainApp').style.opacity = '1'; // Aparece la app suavemente
 };
 
 window.toggleThemeSwitch = () => {
@@ -26,9 +24,6 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    
-    // Si cambia el tema mientras el gráfico está abierto, lo actualiza para que se vea bien
-    if(historicalChartInstance) historicalChartInstance.update();
 };
 
 // --- LÓGICA BCV ---
@@ -55,7 +50,7 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- LÓGICA BINANCE ---
+// --- LÓGICA BINANCE / PARALELO ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
@@ -76,33 +71,38 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (CON TUMBA-CACHÉ Y HORA REAL) ---
+// --- BUSCADOR BCV (CON TUMBA-CACHÉ Y HORA DE API) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
+        // Tumba-caché seguro con el Date.getTime()
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
+        
         const bcvData = data.find(item => item.fuente === 'oficial');
         
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
             
+            // Usamos la fecha exacta de la API
             const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
             
             badge.innerText = "AUTO";
             sync('ratebcv');
-        } else { throw new Error("Sin datos"); }
+        } else {
+            throw new Error("Sin datos de BCV");
+        }
     } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000);
+        setTimeout(() => window.toggleBcv(), 1000); // Falla suave a manual
     }
 };
 
-// --- BUSCADOR BINANCE ---
+// --- BUSCADOR PARALELO ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
@@ -110,127 +110,24 @@ window.fetchBinanceOnly = async () => {
     try {
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
+        
         const paraleloData = data.find(item => item.fuente === 'paralelo');
         
         if (paraleloData && paraleloData.promedio) {
             input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
-        } else { throw new Error("Sin datos"); }
+        } else {
+            throw new Error("Sin datos de Paralelo");
+        }
     } catch (e) {
         badge.innerText = "ERROR";
         setTimeout(() => window.toggleBinance(), 1000);
     }
 };
 
-
-// ==========================================
-// EL GRÁFICO INTERACTIVO (Chart.js)
-// ==========================================
-window.openChartModal = async () => {
-    getEl('chartModal').classList.remove('hidden');
-    
-    try {
-        // Pedimos los históricos a la API usando el tumba caché
-        const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
-        const histData = await r.json();
-        
-        // Filtramos y ordenamos del más viejo al más nuevo (para que el gráfico vaya de izquierda a derecha)
-        const histOficial = histData.filter(h => h.fuente === 'oficial').slice(0, 7).reverse();
-        const histParalelo = histData.filter(h => h.fuente === 'paralelo').slice(0, 7).reverse();
-
-        // Extraemos las fechas para la base (Eje X) - Ejemplo: "03 Mar"
-        const labels = histParalelo.map(h => {
-            const d = new Date(h.fechaActualizacion);
-            return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
-        });
-
-        // Extraemos los precios (Eje Y)
-        const dataParalelo = histParalelo.map(h => h.promedio);
-        const dataOficial = histOficial.map(h => h.promedio);
-
-        // Si ya existía un gráfico abierto antes, lo borramos para pintar el nuevo
-        if (historicalChartInstance) {
-            historicalChartInstance.destroy();
-        }
-
-        // CREAMOS EL GRÁFICO PROFESIONAL
-        const ctx = getEl('historyChart').getContext('2d');
-        historicalChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Paralelo',
-                        data: dataParalelo,
-                        borderColor: '#FF9F0A', // Naranja Binance
-                        backgroundColor: 'rgba(255, 159, 10, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#FF9F0A',
-                        tension: 0.4, // Curvas suaves
-                        fill: true
-                    },
-                    {
-                        label: 'BCV',
-                        data: dataOficial,
-                        borderColor: '#0A84FF', // Azul BCV
-                        backgroundColor: 'rgba(10, 132, 255, 0.1)',
-                        borderWidth: 3,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#0A84FF',
-                        tension: 0.4,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index', // Si tocas una fecha, te muestra ambos precios en la burbuja
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        labels: { color: getEl('themeToggleCheckbox').checked ? '#FFF' : '#000' }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0,0,0,0.8)',
-                        titleFont: { size: 13 },
-                        bodyFont: { size: 14, weight: 'bold' },
-                        padding: 10,
-                        cornerRadius: 10,
-                        displayColors: true
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#8E8E93' }
-                    },
-                    y: {
-                        grid: { color: '#333335' },
-                        ticks: { color: '#8E8E93', callback: function(value) { return 'Bs ' + value; } }
-                    }
-                }
-            }
-        });
-
-    } catch (e) {
-        console.error("Error cargando el gráfico", e);
-        // Si falla el internet, mostramos un error en la consola pero no rompemos la app
-    }
-};
-
-window.closeChartModal = () => {
-    getEl('chartModal').classList.add('hidden');
-};
-// ==========================================
-
-
 window.onload = () => {
+    // Revisa si ya eligió el tema antes
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
         getEl('welcomeScreen').style.display = 'none';
@@ -243,6 +140,7 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
+    // MAGIA AUTO-DESHACER (Binance)
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -257,6 +155,7 @@ window.onload = () => {
         }
     });
 
+    // MAGIA AUTO-DESHACER (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
@@ -271,6 +170,7 @@ window.onload = () => {
         }
     });
     
+    // Sincronización en vivo de la calculadora
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
             sync(id.replace('input', '').toLowerCase());
