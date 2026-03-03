@@ -1,14 +1,14 @@
-/* BLANCO POR DEFECTO */
+/* NEGRO POR DEFECTO */
 :root {
-  --bg: #F2F2F7; --card: #FFFFFF; --border: #D1D1D6;
-  --text: #000000; --text-dim: #636366;
+  --bg: #000000; --card: #1C1C1E; --border: #333335;
+  --text: #FFFFFF; --text-dim: #8E8E93;
   --blue: #0A84FF; --orange: #FF9F0A; --green: #32D74B;
 }
 
-/* OSCURO AL ACTIVARSE */
-[data-theme="dark"] {
-  --bg: #000000; --card: #1C1C1E; --border: #333335;
-  --text: #FFFFFF; --text-dim: #8E8E93;
+/* CLARO AL ACTIVARSE EL SWITCH */
+[data-theme="light"] {
+  --bg: #F2F2F7; --card: #FFFFFF; --border: #D1D1D6;
+  --text: #000000; --text-dim: #636366;
 }
 
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
@@ -17,42 +17,45 @@ input[type=number] { -moz-appearance: textfield; }
 body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 15px; transition: 0.3s; margin: 0; overflow-x: hidden; }
 .app-container { width: 100%; max-width: 360px; border: 1px solid var(--border); padding: 22px; border-radius: 35px; background: var(--bg); }
 
+/* PANTALLA DE BIENVENIDA (MODAL) */
+.welcome-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 9999; display: flex; justify-content: center; align-items: center; padding: 20px;
+  transition: opacity 0.4s ease;
+}
+.welcome-card {
+  background: #1C1C1E; border: 1px solid #333335; border-radius: 35px; padding: 30px 20px;
+  width: 100%; max-width: 340px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+}
+.welcome-card h2 { color: #FFFFFF; margin: 0 0 10px 0; font-size: 24px; letter-spacing: -0.5px; }
+.welcome-card p { color: #8E8E93; font-size: 13px; margin-bottom: 25px; line-height: 1.4; font-weight: 500; }
+
+.welcome-btn {
+  width: 100%; border: none; padding: 16px; border-radius: 20px; margin-bottom: 12px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: 0.2s;
+}
+.welcome-btn.btn-auto { background: linear-gradient(135deg, #0A84FF, #005bb5); color: white; box-shadow: 0 4px 15px rgba(10, 132, 255, 0.3); }
+.welcome-btn.btn-manual { background: #333335; color: white; border: 1px solid #48484A; }
+.welcome-btn strong { font-size: 14px; font-weight: 900; letter-spacing: 0.5px; }
+.welcome-btn span { font-size: 10px; font-weight: 500; opacity: 0.85; line-height: 1.2; padding: 0 10px; }
+.welcome-btn:active { transform: scale(0.96); }
+
 /* V-GAP LOGO ANIMADO Y PREMIUM */
 .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .logo-area { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 24px; letter-spacing: -0.5px; }
 .logo-icon { 
-  background: linear-gradient(135deg, #00C6FF, #0072FF); 
-  color: white; 
-  width: 34px; 
-  height: 34px; 
-  border-radius: 10px; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  font-size: 22px;
-  box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
-  position: relative;
-  overflow: hidden;
+  background: linear-gradient(135deg, #00C6FF, #0072FF); color: white; width: 34px; height: 34px; 
+  border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px;
+  box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4); position: relative; overflow: hidden;
 }
 .logo-icon::after {
-  content: '';
-  position: absolute;
-  top: -50%; left: -50%;
-  width: 200%; height: 200%;
+  content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
   background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
-  transform: rotate(45deg);
-  animation: shine 3s infinite;
+  transform: rotate(45deg); animation: shine 3s infinite;
 }
-@keyframes shine {
-  0% { transform: translateX(-100%) rotate(45deg); }
-  50% { transform: translateX(100%) rotate(45deg); }
-  100% { transform: translateX(100%) rotate(45deg); }
-}
-.logo-text {
-  background: linear-gradient(to right, var(--text), var(--blue));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
+@keyframes shine { 0% { transform: translateX(-100%) rotate(45deg); } 50% { transform: translateX(100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
+.logo-text { background: linear-gradient(to right, var(--text), var(--blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
 .nav-right { display: flex; align-items: center; gap: 10px; }
 .live-tag { background: var(--green); color: black; font-size: 9px; font-weight: 900; padding: 2px 6px; border-radius: 4px; animation: blink 1.5s infinite; }
@@ -68,8 +71,8 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 
 .input-field input { width: 100%; background: transparent; border: none; color: var(--text); font-size: 19px; font-weight: 700; outline: none; margin-top: 4px; }
 .input-field label { font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase; display: flex; align-items: center; }
-
 .label-row { display: flex; justify-content: space-between; align-items: center; }
+
 .bcv-field { opacity: 0.6; }
 .bcv-field.unlocked { opacity: 1; border-color: var(--blue); box-shadow: 0 0 10px rgba(10, 132, 255, 0.2); }
 .highlight-border { border-color: var(--orange); }
@@ -87,19 +90,19 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
 /* ---------------------------------------------------
-   EL INTERRUPTOR BRUTAL (SOL / LUNA)
+   EL INTERRUPTOR ANIMADO (SOL / LUNA) - INVERTIDO
 ----------------------------------------------------- */
 .theme-switch { position: relative; display: inline-block; width: 62px; height: 30px; }
 .theme-switch input { opacity: 0; width: 0; height: 0; }
-.slider-theme { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #D1D1D6; transition: .4s; border-radius: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
-.slider-theme:before { position: absolute; content: ""; height: 24px; width: 24px; left: 3px; bottom: 3px; background-color: white; transition: .4s cubic-bezier(0.68, -0.55, 0.265, 1.55); border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3); z-index: 2; }
-input:checked + .slider-theme { background-color: #1C1C1E; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
-input:checked + .slider-theme:before { transform: translateX(32px); background-color: #333335; }
+.slider-theme { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333335; transition: .4s; border-radius: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+.slider-theme:before { position: absolute; content: ""; height: 24px; width: 24px; left: 3px; bottom: 3px; background-color: #1C1C1E; transition: .4s cubic-bezier(0.68, -0.55, 0.265, 1.55); border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.8); z-index: 2; }
+input:checked + .slider-theme { background-color: #D1D1D6; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+input:checked + .slider-theme:before { transform: translateX(32px); background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
 
-.icon-sun { width: 15px; height: 15px; color: #FF9F0A; z-index: 1; transition: 0.3s; }
-.icon-moon { width: 14px; height: 14px; color: #8E8E93; z-index: 1; transition: 0.3s; }
-input:checked + .slider-theme .icon-moon { color: #FFFFFF; }
-input:checked + .slider-theme .icon-sun { color: #636366; }
+.icon-moon { width: 14px; height: 14px; color: #FFFFFF; z-index: 1; transition: 0.3s; }
+.icon-sun { width: 15px; height: 15px; color: #636366; z-index: 1; transition: 0.3s; }
+input:checked + .slider-theme .icon-moon { color: #8E8E93; }
+input:checked + .slider-theme .icon-sun { color: #FF9F0A; }
 
 /* ETIQUETAS INTELIGENTES */
 .mode-badge { font-size: 10px; font-weight: 800; padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; letter-spacing: 0.5px; user-select: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
