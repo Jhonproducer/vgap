@@ -1,10 +1,9 @@
 <!DOCTYPE html>
-<html lang="es" translate="no">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <meta name="google" content="notranslate">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -12,7 +11,7 @@
     <link rel="manifest" href="manifest.json">
     
     <title>V-Gap Ultra</title>
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -30,7 +29,7 @@
     </div>
 </div>
 
-<div class="app-container" id="mainApp" style="opacity: 0;">
+<div class="app-container" id="mainApp">
   <div class="top-nav">
     <div class="logo-area">
       <div class="logo-icon">V</div>
@@ -54,7 +53,7 @@
     <div class="gap-group tooltip">
       <div id="brechaBadge" class="gap-badge">0.00%</div>
       <div id="factorBadge" class="factor-text">1.00x</div>
-      <span class="tooltiptext">Diferencia porcentual y factor entre Paralelo y BCV.</span>
+      <span class="tooltiptext">Diferencia porcentual y factor entre Binance y BCV.</span>
     </div>
   </div>
 
@@ -80,7 +79,7 @@
           <svg viewBox="0 0 24 24" class="mini-icon binance-logo">
             <path fill="#F3BA2F" d="M11.996 9.604L9.593 12l2.403 2.396L14.4 12l-2.404-2.396zM11.996 2.396L16.8 7.2l-2.402 2.404-2.402-2.404-2.403 2.404L7.19 7.2l4.806-4.804zM16.8 16.8l2.402-2.404L21.604 12l-2.402-2.404-2.404 2.404 2.404 2.404L16.8 16.8zm-9.604 0L4.793 14.4l2.403-2.404L4.793 9.592 2.39 12l2.403 2.404L7.196 16.8zm4.8 4.804L7.19 16.8l2.403-2.404 2.403 2.404 2.402-2.404L16.8 16.8l-4.804 4.8z"/>
           </svg>
-          PARALELO ⓘ <span class="tooltiptext">Tasa Paralelo / Binance P2P.</span>
+          BINANCE ⓘ <span class="tooltiptext">Tasa P2P Venta USDT.</span>
         </label>
         <div id="badgeBinance" class="mode-badge api-binance" onclick="toggleBinance()">AUTO</div>
       </div>
@@ -122,6 +121,6 @@
   </div>
 </div>
 
-<script src="script.js?v=3.0"></script>
+<script src="script.js"></script>
 </body>
 </html>
