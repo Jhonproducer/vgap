@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
+    <!-- Si tienes logo json de la manifest pisa normal  -->
     <link rel="manifest" href="manifest.json">
-    
     <title>V-Gap Ultra</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -110,7 +109,7 @@
   <button class="btn-clear" onclick="resetAll()">Limpiar Todo</button>
 
   <div class="result-card">
-    <p class="card-title">RECIBES NETO</p>
+    <p class="card-title" style="margin-bottom:2px; font-weight:800; font-size:11px; color:var(--text-dim);">RECIBES NETO</p>
     <h2 id="bigBsDisplay">0,00 Bs</h2>
     <button class="btn-copy-elegant" onclick="copyToClipboard()">
       <span>COPIAR MONTO</span>
@@ -119,6 +118,34 @@
       Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
     </div>
   </div>
+
+  <!-- NÚCLEO GRAFICO ESTILO BINANCE  -->
+  <div class="chart-wrapper">
+    <div class="chart-header" onclick="toggleChart()">
+      <span>📊 Variación Últimos 30D</span>
+      <svg class="chevron-icon" id="chartChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+         <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </div>
+    <div id="chartContent" class="chart-content-grid collapsed">
+      <div class="chart-inner-area">
+        <div class="chart-tabs">
+            <button class="chart-tab active" id="tabBinChart" onclick="switchChartType('paralelo')">P2P (Paralelo)</button>
+            <button class="chart-tab" id="tabBcvChart" onclick="switchChartType('oficial')">Banco Oficial (BCV)</button>
+        </div>
+        <div class="chart-relative-container">
+            <!-- Pizarras superpuestas dinamicas interactivas  -->
+            <div id="chartHud" class="chart-hud-layer">
+               <span id="hudDate">Buscando Datos...</span>
+               <span id="hudValue">0.00 Bs</span>
+            </div>
+            <!-- Canvas Nativo Cero-Latencia   -->
+            <canvas id="ultraHistoryCanvas" height="160"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  
 </div>
 
 <script src="script.js"></script>
