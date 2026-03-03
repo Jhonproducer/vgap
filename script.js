@@ -15,7 +15,7 @@ window.startApp = (theme) => {
     localStorage.setItem('vgap_theme_saved', theme);
     
     getEl('welcomeScreen').classList.add('hidden');
-    getEl('mainApp').style.opacity = '1'; // Aparece la app suavemente
+    getEl('mainApp').style.opacity = '1';
 };
 
 window.toggleThemeSwitch = () => {
@@ -77,7 +77,6 @@ window.fetchBcvOnly = async () => {
     const input = getEl('rateBcv');
 
     try {
-        // Tumba-caché seguro con el Date.getTime()
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
         
@@ -86,7 +85,6 @@ window.fetchBcvOnly = async () => {
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
             
-            // Usamos la fecha exacta de la API
             const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
@@ -98,7 +96,7 @@ window.fetchBcvOnly = async () => {
         }
     } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000); // Falla suave a manual
+        setTimeout(() => window.toggleBcv(), 1000); 
     }
 };
 
@@ -127,7 +125,6 @@ window.fetchBinanceOnly = async () => {
 };
 
 window.onload = () => {
-    // Revisa si ya eligió el tema antes
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
         getEl('welcomeScreen').style.display = 'none';
@@ -170,7 +167,6 @@ window.onload = () => {
         }
     });
     
-    // Sincronización en vivo de la calculadora
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
             sync(id.replace('input', '').toLowerCase());
