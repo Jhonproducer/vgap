@@ -1,18 +1,16 @@
 const getEl = (id) => document.getElementById(id);
 
 let isBcvApi = true; 
+let lastSavedBinance = localStorage.getItem('vgap_binance') || "610.80";
+let binanceMemoryStack = [lastSavedBinance];
 
-// MEMORIA "CTRL + Z" PARA BINANCE
-let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "610.80"];
-
-// Lógica del Interruptor Animado
 window.toggleThemeSwitch = () => {
     const isDark = getEl('themeToggleCheckbox').checked;
     document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
 };
 
-// --- LÓGICA BCV (Se mantiene intacta) ---
+// --- LÓGICA BCV ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -25,7 +23,7 @@ window.toggleBcv = async () => {
         input.disabled = true;
         container.classList.remove('unlocked');
         await fetchBcvOnly();
-        badge.innerText = "AUTO";
+        if (isBcvApi) badge.innerText = "AUTO";
     } else {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
@@ -35,36 +33,72 @@ window.toggleBcv = async () => {
     }
 };
 
+// --- MOTOR BLINDADO ANTI-BLOQUEO PARA BCV ---
 window.fetchBcvOnly = async () => {
-    try {
-        const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
-        const data = await res.json();
-        getEl('rateBcv').value = parseFloat(data.promedio).toFixed(2);
-        
+    let bcvRate = 0;
+
+    // Arsenal de enlaces para burlar a las operadoras
+    const endpoints = [
+        { url: 'https://ve.dolarapi.com/v1/dolares/oficial', type: 'dolarapi' },
+        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv', type: 'pydolar' },
+        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ve.dolarapi.com/v1/dolares/oficial'), type: 'dolarapi' }
+    ];
+
+    for (let ep of endpoints) {
+        try {
+            const r = await fetch(ep.url + (ep.url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+            const d = await r.json();
+            
+            if (ep.type === 'dolarapi' && d && d.promedio) {
+                bcvRate = parseFloat(d.promedio);
+            } else if (ep.type === 'pydolar' && d && d.price) {
+                bcvRate = parseFloat(d.price);
+            }
+            
+            if (bcvRate > 0) break; // Si lo consigue, aborta el ciclo
+        } catch (e) { /* Falla silenciosa, salta al siguiente enlace */ }
+    }
+
+    const badge = getEl('badgeBcv');
+    const input = getEl('rateBcv');
+    const container = getEl('bcvContainer');
+
+    if (bcvRate > 0) {
+        input.value = bcvRate.toFixed(2);
         const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
         const formattedDate = new Intl.DateTimeFormat('es-VE', options).format(new Date());
         getEl('lastUpdate').innerText = `Actualizado: ${formattedDate} VEN`;
         sync('ratebcv');
-    } catch (e) { console.error("Error API BCV"); }
+    } else {
+        // FALLA ELEGANTE: Si todas las APIs mueren, no se congela. Te lo pasa a manual.
+        badge.innerText = "ERROR";
+        badge.className = "mode-badge manual-mode";
+        badge.style.color = "#FF453A";
+        
+        setTimeout(() => {
+            isBcvApi = false;
+            badge.innerText = "MANUAL";
+            badge.style.color = "";
+            input.disabled = false;
+            container.classList.add('unlocked');
+        }, 1200);
+    }
 };
 
-// --- EL VERDADERO BOTÓN DESHACER (CTRL + Z) ---
+// --- EL VERDADERO BOTÓN DESHACER PARA BINANCE (CTRL + Z) ---
 window.restoreBinance = () => {
     const input = getEl('rateBinance');
     const badge = getEl('badgeBinance');
     
-    // Si la memoria tiene pasos guardados, retrocedemos al paso anterior
     if (binanceMemoryStack.length > 1 && input.value === binanceMemoryStack[binanceMemoryStack.length - 1]) {
-        binanceMemoryStack.pop(); // Borra el error de la memoria
+        binanceMemoryStack.pop(); 
     }
     
-    // Recupera la tasa buena
     const val = binanceMemoryStack[binanceMemoryStack.length - 1];
     input.value = val;
     localStorage.setItem('vgap_binance', val);
     sync('ratebinance');
     
-    // Efecto visual satisfactorio
     badge.innerText = "¡RECUPERADO!";
     badge.style.background = "var(--green)";
     badge.style.color = "black";
@@ -80,14 +114,12 @@ window.onload = () => {
     getEl('rateBinance').value = binanceMemoryStack[binanceMemoryStack.length - 1];
     fetchBcvOnly();
     
-    // Capturamos el número cada vez que sales de la caja
     getEl('rateBinance').addEventListener('blur', (e) => {
         const val = e.target.value;
         if(val && parseFloat(val) > 0) {
-            // Solo lo guarda si es un número diferente al que ya estaba guardado
             if (val !== binanceMemoryStack[binanceMemoryStack.length - 1]) {
                 binanceMemoryStack.push(val);
-                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift(); // Recuerda hasta 10 pasos
+                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
             }
             localStorage.setItem('vgap_binance', val);
         }
