@@ -87,7 +87,7 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
 /* ---------------------------------------------------
-   EL NUEVO INTERRUPTOR BRUTAL (TEMA)
+   EL INTERRUPTOR BRUTAL (SOL / LUNA)
 ----------------------------------------------------- */
 .theme-switch { position: relative; display: inline-block; width: 62px; height: 30px; }
 .theme-switch input { opacity: 0; width: 0; height: 0; }
@@ -104,6 +104,7 @@ input:checked + .slider-theme .icon-sun { color: #636366; }
 /* ETIQUETAS INTELIGENTES */
 .mode-badge { font-size: 10px; font-weight: 800; padding: 5px 10px; border-radius: 8px; cursor: pointer; transition: all 0.3s ease; letter-spacing: 0.5px; user-select: none; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
 .api-bcv { background: var(--blue); color: white; box-shadow: 0 0 8px rgba(10, 132, 255, 0.4); }
+.api-binance { background: var(--orange); color: black; box-shadow: 0 0 8px rgba(255, 159, 10, 0.4); }
 .manual-mode { background: var(--border); color: var(--text); opacity: 0.9; }
 
 .tooltip { position: relative; cursor: help; }
