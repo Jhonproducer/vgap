@@ -51,9 +51,14 @@
   <div class="header">
     <div class="timestamp" id="lastUpdate">Actualizando...</div>
     <div class="gap-group tooltip">
-      <div id="brechaBadge" class="gap-badge">0.00%</div>
-      <div id="factorBadge" class="factor-text">1.00x</div>
-      <span class="tooltiptext">Diferencia porcentual y factor entre Binance y BCV.</span>
+      <button class="mini-chart-btn" onclick="openChartModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+      </button>
+      <div class="gap-texts">
+          <div id="brechaBadge" class="gap-badge">0.00%</div>
+          <div id="factorBadge" class="factor-text">1.00x</div>
+      </div>
+      <span class="tooltiptext">Brecha y Gráfico Histórico.</span>
     </div>
   </div>
 
@@ -119,6 +124,18 @@
       Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
     </div>
   </div>
+</div>
+
+<div id="chartModal" class="modal-overlay hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📈 TENDENCIA (7 DÍAS)</h3>
+            <button class="btn-close-modal" onclick="closeChartModal()">✖</button>
+        </div>
+        <div class="modal-body" id="chartBody">
+            <p style="text-align:center; font-size:12px; color:var(--text-dim);">Cargando historial...</p>
+        </div>
+    </div>
 </div>
 
 <script src="script.js"></script>
