@@ -7,31 +7,29 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#000000"> <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <link rel="manifest" href="manifest.json">
     
     <title>V-Gap Ultra</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<div class="theme-selection-overlay" id="themeSelectionOverlay">
-    <div class="galaxy-blur"></div>
-    <div class="theme-selection-card">
-        <p class="select-text">¿CÓMO QUIERES V-GAP ULTRA?</p>
-        <div class="theme-options">
-            <button class="theme-card light-card tooltip" onclick="chooseTheme('light')">
-                ☀️<span class="mode-label-text">MODO CLARO</span>
-                <span class="tooltiptext">Perfecto para el día</span>
+<div id="welcomeScreen" class="welcome-screen">
+    <div class="welcome-content">
+        <h2 class="welcome-title">¿CÓMO QUIERES V-GAP ULTRA?</h2>
+        <div class="welcome-buttons">
+            <button class="btn-theme-select btn-light" onclick="startApp('light')">
+                <span class="emoji">☀️</span> MODO CLARO
             </button>
-            <button class="theme-card dark-card tooltip" onclick="chooseTheme('dark')">
-                🌙<span class="mode-label-text">MODO OSCURO</span>
-                <span class="tooltiptext">Relajante para la vista</span>
+            <button class="btn-theme-select btn-dark" onclick="startApp('dark')">
+                <span class="emoji">🌙</span> MODO OSCURO
             </button>
         </div>
     </div>
 </div>
 
-<div class="app-container" id="mainApp" style="display: none;">
+<div class="app-container" id="mainApp">
   <div class="top-nav">
     <div class="logo-area">
       <div class="logo-icon">V</div>
@@ -45,7 +43,7 @@
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         </span>
-        <span class="tooltiptext">Cambiar tema visual</span>
+        <span class="tooltiptext">Modo Oscuro / Claro</span>
       </label>
     </div>
   </div>
@@ -55,7 +53,7 @@
     <div class="gap-group tooltip">
       <div id="brechaBadge" class="gap-badge">0.00%</div>
       <div id="factorBadge" class="factor-text">1.00x</div>
-      <span class="tooltiptext">Diferencia porcentual y factor entre Paralelo y BCV.</span>
+      <span class="tooltiptext">Diferencia porcentual y factor entre Binance y BCV.</span>
     </div>
   </div>
 
@@ -73,16 +71,6 @@
         <div id="badgeBcv" class="mode-badge api-bcv" onclick="toggleBcv()">AUTO</div>
       </div>
       <input type="number" id="rateBcv" inputmode="decimal" step="0.01" disabled>
-      <div class="sparkline-container">
-          <svg id="sparklineBcv" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <defs>
-                  <filter id="glowBcv" x="-50%" y="-50%" width="200%" height="200%">
-                      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#0A84FF" flood-opacity="0.9"/>
-                  </filter>
-              </defs>
-              <path class="sparkline-path" d="" style="filter: url(#glowBcv);"></path>
-          </svg>
-      </div>
     </div>
 
     <div class="input-field" id="binanceContainer">
@@ -91,21 +79,11 @@
           <svg viewBox="0 0 24 24" class="mini-icon binance-logo">
             <path fill="#F3BA2F" d="M11.996 9.604L9.593 12l2.403 2.396L14.4 12l-2.404-2.396zM11.996 2.396L16.8 7.2l-2.402 2.404-2.402-2.404-2.403 2.404L7.19 7.2l4.806-4.804zM16.8 16.8l2.402-2.404L21.604 12l-2.402-2.404-2.404 2.404 2.404 2.404L16.8 16.8zm-9.604 0L4.793 14.4l2.403-2.404L4.793 9.592 2.39 12l2.403 2.404L7.196 16.8zm4.8 4.804L7.19 16.8l2.403-2.404 2.403 2.404 2.402-2.404L16.8 16.8l-4.804 4.8z"/>
           </svg>
-          PARALELO ⓘ <span class="tooltiptext">Tasa P2P Venta USDT (Paralelo).</span>
+          BINANCE ⓘ <span class="tooltiptext">Tasa P2P Venta USDT.</span>
         </label>
         <div id="badgeBinance" class="mode-badge api-binance" onclick="toggleBinance()">AUTO</div>
       </div>
       <input type="number" id="rateBinance" inputmode="decimal" step="0.01" disabled>
-      <div class="sparkline-container">
-          <svg id="sparklineBinance" viewBox="0 0 100 30" preserveAspectRatio="none">
-              <defs>
-                  <filter id="glowBinance" x="-50%" y="-50%" width="200%" height="200%">
-                      <feDropShadow dx="0" dy="0" stdDeviation="1.5" flood-color="#FF9F0A" flood-opacity="0.9"/>
-                  </filter>
-              </defs>
-              <path class="sparkline-path" d="" style="filter: url(#glowBinance);"></path>
-          </svg>
-      </div>
     </div>
 
     <div class="input-field">
