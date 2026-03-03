@@ -6,27 +6,13 @@ let isBinanceApi = true;
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
-// --- EL DESTRUCTOR DE CACHÉ ---
-// Esto obliga al navegador normal a descargar la tasa fresca igual que el incógnito
-const fetchConfig = {
-    cache: 'no-store',
-    headers: {
-        'Pragma': 'no-cache',
-        'Cache-Control': 'no-cache'
-    }
-};
-
 // --- PANTALLA DE BIENVENIDA Y TEMA ---
 window.startApp = (theme) => {
-    // Aplica el tema elegido
     document.body.setAttribute('data-theme', theme);
     getEl('themeToggleCheckbox').checked = theme === 'dark';
     document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#000000' : '#F2F2F7');
-    
-    // Guarda la decisión
     localStorage.setItem('vgap_theme_saved', theme);
     
-    // Oculta la pantalla negra y muestra la app suavemente
     getEl('welcomeScreen').classList.add('hidden');
     getEl('mainApp').style.opacity = '1';
 };
@@ -84,21 +70,27 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV CON TUMBA-CACHÉ ---
+// --- BUSCADOR BCV (TUMBA-CACHÉ SIMPLE + HORA DE LA API) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now(), fetchConfig);
+        // Truco universal anti-caché: Añadir los milisegundos exactos al final del link.
+        // No usamos cabeceras raras para que el navegador no nos bloquee por seguridad CORS.
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
         
         const bcvData = data.find(item => item.fuente === 'oficial');
         
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
+            
+            // ¡Usamos la fecha exacta que viene de la API que tú descubriste!
+            const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
+            
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
@@ -110,13 +102,13 @@ window.fetchBcvOnly = async () => {
     }
 };
 
-// --- BUSCADOR BINANCE CON TUMBA-CACHÉ ---
+// --- BUSCADOR BINANCE (TUMBA-CACHÉ SIMPLE) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now(), fetchConfig);
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
         
         const paraleloData = data.find(item => item.fuente === 'paralelo');
@@ -135,7 +127,6 @@ window.fetchBinanceOnly = async () => {
 };
 
 window.onload = () => {
-    // Revisa si ya eligió el tema antes
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
         getEl('welcomeScreen').style.display = 'none';
@@ -145,11 +136,9 @@ window.onload = () => {
         getEl('mainApp').style.opacity = '1';
     }
 
-    // Busca las tasas
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // Auto-Deshacer (Binance)
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -164,7 +153,6 @@ window.onload = () => {
         }
     });
 
-    // Auto-Deshacer (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
@@ -179,7 +167,6 @@ window.onload = () => {
         }
     });
     
-    // Sincronización en vivo
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
             sync(id.replace('input', '').toLowerCase());
