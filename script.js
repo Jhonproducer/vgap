@@ -4,8 +4,8 @@ let isBcvApi = true;
 let isBinanceApi = true; 
 
 // Memoria para el auto-deshacer manual
-let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "610.80"];
-let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "41.50"];
+let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
+let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
 // --- INTERRUPTOR DE TEMA (SOL/LUNA) ---
 window.toggleThemeSwitch = () => {
@@ -59,17 +59,20 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (DIRECTO VE.DOLARAPI.COM) ---
+// --- BUSCADOR BCV (LEYENDO EL JSON QUE DESCUBRISTE) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
-        const d = await r.json();
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
+        const data = await r.json();
         
-        if (d && d.promedio) {
-            input.value = parseFloat(d.promedio).toFixed(2);
+        // Buscamos la fuente "oficial" en el array
+        const bcvData = data.find(item => item.fuente === 'oficial');
+        
+        if (bcvData && bcvData.promedio) {
+            input.value = parseFloat(bcvData.promedio).toFixed(2);
             
             // Actualizamos la fecha
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
@@ -78,7 +81,7 @@ window.fetchBcvOnly = async () => {
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
-            throw new Error("Sin datos");
+            throw new Error("Sin datos de BCV");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -86,21 +89,24 @@ window.fetchBcvOnly = async () => {
     }
 };
 
-// --- BUSCADOR BINANCE (DIRECTO VE.DOLARAPI.COM) ---
+// --- BUSCADOR BINANCE/PARALELO (LEYENDO EL JSON QUE DESCUBRISTE) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares/binance?t=' + Date.now());
-        const d = await r.json();
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
+        const data = await r.json();
         
-        if (d && d.promedio) {
-            input.value = parseFloat(d.promedio).toFixed(2);
+        // Buscamos la fuente "paralelo" en el array
+        const paraleloData = data.find(item => item.fuente === 'paralelo');
+        
+        if (paraleloData && paraleloData.promedio) {
+            input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
         } else {
-            throw new Error("Sin datos");
+            throw new Error("Sin datos de Paralelo");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -109,7 +115,7 @@ window.fetchBinanceOnly = async () => {
 };
 
 window.onload = () => {
-    // Al cargar, buscamos ambas desde la API solicitada
+    // Al cargar, buscamos ambas desde la API automáticamente
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
