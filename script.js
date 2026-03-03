@@ -1,16 +1,18 @@
 const getEl = (id) => document.getElementById(id);
 
+// ¡Ambas tasas arrancan en AUTO y vivas gracias a la súper API!
 let isBcvApi = true; 
-let lastSavedBinance = localStorage.getItem('vgap_binance') || "610.80";
-let binanceMemoryStack = [lastSavedBinance];
+let isBinanceApi = true; 
+let lastManualBinance = localStorage.getItem('vgap_binance') || "610.80";
 
+// Lógica del Interruptor Animado iOS
 window.toggleThemeSwitch = () => {
     const isDark = getEl('themeToggleCheckbox').checked;
     document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
 };
 
-// --- LÓGICA BCV ---
+// --- CONTROL ETIQUETA BCV ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -33,30 +35,46 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- MOTOR BLINDADO ANTI-BLOQUEO PARA BCV ---
+// --- CONTROL ETIQUETA BINANCE ---
+window.toggleBinance = async () => {
+    isBinanceApi = !isBinanceApi;
+    const badge = getEl('badgeBinance');
+    const input = getEl('rateBinance');
+    
+    if (isBinanceApi) {
+        badge.innerText = "...";
+        badge.className = "mode-badge api-binance";
+        input.disabled = true;
+        await fetchBinanceOnly(); 
+        if (isBinanceApi) badge.innerText = "AUTO";
+    } else {
+        badge.innerText = "MANUAL";
+        badge.className = "mode-badge manual-mode";
+        input.disabled = false;
+        input.value = lastManualBinance;
+        sync('ratebinance');
+        input.focus();
+    }
+};
+
+// --- SÚPER MOTOR: PYDOLARVENEZUELA (EXTRACCIÓN BCV) ---
 window.fetchBcvOnly = async () => {
     let bcvRate = 0;
-
-    // Arsenal de enlaces para burlar a las operadoras
     const endpoints = [
-        { url: 'https://ve.dolarapi.com/v1/dolares/oficial', type: 'dolarapi' },
-        { url: 'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv', type: 'pydolar' },
-        { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://ve.dolarapi.com/v1/dolares/oficial'), type: 'dolarapi' }
+        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv', // EL SANTO GRIAL
+        'https://ve.dolarapi.com/v1/dolares/oficial', // Respaldo por si acaso
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv') // Proxy
     ];
 
-    for (let ep of endpoints) {
+    for (let url of endpoints) {
         try {
-            const r = await fetch(ep.url + (ep.url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+            const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
             const d = await r.json();
+            if (d && d.price) bcvRate = parseFloat(d.price);
+            else if (d && d.promedio) bcvRate = parseFloat(d.promedio);
             
-            if (ep.type === 'dolarapi' && d && d.promedio) {
-                bcvRate = parseFloat(d.promedio);
-            } else if (ep.type === 'pydolar' && d && d.price) {
-                bcvRate = parseFloat(d.price);
-            }
-            
-            if (bcvRate > 0) break; // Si lo consigue, aborta el ciclo
-        } catch (e) { /* Falla silenciosa, salta al siguiente enlace */ }
+            if (bcvRate > 0) break;
+        } catch (e) {}
     }
 
     const badge = getEl('badgeBcv');
@@ -66,15 +84,12 @@ window.fetchBcvOnly = async () => {
     if (bcvRate > 0) {
         input.value = bcvRate.toFixed(2);
         const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-        const formattedDate = new Intl.DateTimeFormat('es-VE', options).format(new Date());
-        getEl('lastUpdate').innerText = `Actualizado: ${formattedDate} VEN`;
+        getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
         sync('ratebcv');
     } else {
-        // FALLA ELEGANTE: Si todas las APIs mueren, no se congela. Te lo pasa a manual.
         badge.innerText = "ERROR";
         badge.className = "mode-badge manual-mode";
         badge.style.color = "#FF453A";
-        
         setTimeout(() => {
             isBcvApi = false;
             badge.innerText = "MANUAL";
@@ -85,48 +100,59 @@ window.fetchBcvOnly = async () => {
     }
 };
 
-// --- EL VERDADERO BOTÓN DESHACER PARA BINANCE (CTRL + Z) ---
-window.restoreBinance = () => {
+// --- SÚPER MOTOR: PYDOLARVENEZUELA (EXTRACCIÓN BINANCE) ---
+window.fetchBinanceOnly = async () => {
+    let p2pRate = 0;
+    const endpoints = [
+        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance', // EL SANTO GRIAL
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance') // Proxy
+    ];
+
+    for (let url of endpoints) {
+        try {
+            const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+            const d = await r.json();
+            if (d && d.price) p2pRate = parseFloat(d.price);
+            if (p2pRate > 0) break;
+        } catch (e) {}
+    }
+
     const input = getEl('rateBinance');
     const badge = getEl('badgeBinance');
-    
-    if (binanceMemoryStack.length > 1 && input.value === binanceMemoryStack[binanceMemoryStack.length - 1]) {
-        binanceMemoryStack.pop(); 
+
+    if (p2pRate > 0) {
+        input.value = p2pRate.toFixed(2);
+        sync('ratebinance');
+    } else {
+        badge.innerText = "ERROR";
+        badge.className = "mode-badge manual-mode";
+        badge.style.color = "#FF453A";
+        setTimeout(() => {
+            isBinanceApi = false;
+            badge.innerText = "MANUAL";
+            badge.style.color = "";
+            input.disabled = false;
+            input.value = lastManualBinance;
+            sync('ratebinance');
+        }, 1200);
     }
-    
-    const val = binanceMemoryStack[binanceMemoryStack.length - 1];
-    input.value = val;
-    localStorage.setItem('vgap_binance', val);
-    sync('ratebinance');
-    
-    badge.innerText = "¡RECUPERADO!";
-    badge.style.background = "var(--green)";
-    badge.style.color = "black";
-    
-    setTimeout(() => {
-        badge.innerText = "DESHACER";
-        badge.style.background = ""; 
-        badge.style.color = "";
-    }, 1200);
 };
 
 window.onload = () => {
-    getEl('rateBinance').value = binanceMemoryStack[binanceMemoryStack.length - 1];
+    // Apenas abres la página, la súper API trae ambas tasas automáticamente
+    getEl('rateBinance').value = lastManualBinance;
     fetchBcvOnly();
-    
-    getEl('rateBinance').addEventListener('blur', (e) => {
-        const val = e.target.value;
-        if(val && parseFloat(val) > 0) {
-            if (val !== binanceMemoryStack[binanceMemoryStack.length - 1]) {
-                binanceMemoryStack.push(val);
-                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
-            }
-            localStorage.setItem('vgap_binance', val);
-        }
-    });
+    fetchBinanceOnly(); 
     
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
+            if(id === 'rateBinance' && !isBinanceApi) {
+                const val = e.target.value;
+                if(val && parseFloat(val) > 0) {
+                    lastManualBinance = val;
+                    localStorage.setItem('vgap_binance', val);
+                }
+            }
             sync(id.replace('input', '').toLowerCase());
         });
     });
