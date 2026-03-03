@@ -1,14 +1,13 @@
 const getEl = (id) => document.getElementById(id);
 
-// Ambas arrancan en automático conectadas a PyDolarVenezuela
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
-// Memoria para el auto-deshacer
-let lastSavedBinance = localStorage.getItem('vgap_binance') || "610.80";
-let lastSavedBcv = localStorage.getItem('vgap_bcv') || "41.50";
+// Memoria para el auto-deshacer manual
+let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "610.80"];
+let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "41.50"];
 
-// --- INTERRUPTOR DE TEMA ---
+// --- INTERRUPTOR DE TEMA (SOL/LUNA) ---
 window.toggleThemeSwitch = () => {
     const isDark = getEl('themeToggleCheckbox').checked;
     document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -32,7 +31,7 @@ window.toggleBcv = async () => {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
-        input.value = lastSavedBcv;
+        input.value = bcvMemoryStack[bcvMemoryStack.length - 1];
         sync('ratebcv');
         container.classList.add('unlocked');
         input.focus();
@@ -54,111 +53,97 @@ window.toggleBinance = async () => {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
-        input.value = lastSavedBinance;
+        input.value = binanceMemoryStack[binanceMemoryStack.length - 1];
         sync('ratebinance');
         input.focus();
     }
 };
 
-// --- BUSCADOR BCV (PYDOLARVENEZUELA) ---
+// --- BUSCADOR BCV (DIRECTO VE.DOLARAPI.COM) ---
 window.fetchBcvOnly = async () => {
-    let bcvRate = 0;
-    const endpoints = [
-        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv',
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/bcv')
-    ];
-
-    for (let url of endpoints) {
-        try {
-            const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
-            const d = await r.json();
-            if (d && d.price) { bcvRate = parseFloat(d.price); break; }
-        } catch (e) { }
-    }
-
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
-    if (bcvRate > 0) {
-        input.value = bcvRate.toFixed(2);
-        lastSavedBcv = input.value;
-        localStorage.setItem('vgap_bcv', input.value);
+    try {
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
+        const d = await r.json();
         
-        const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-        getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
-        badge.innerText = "AUTO";
-        sync('ratebcv');
-    } else {
+        if (d && d.promedio) {
+            input.value = parseFloat(d.promedio).toFixed(2);
+            
+            // Actualizamos la fecha
+            const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
+            
+            badge.innerText = "AUTO";
+            sync('ratebcv');
+        } else {
+            throw new Error("Sin datos");
+        }
+    } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000); // Si falla, pasa a manual solo
+        setTimeout(() => window.toggleBcv(), 1000);
     }
 };
 
-// --- BUSCADOR BINANCE (PYDOLARVENEZUELA) ---
+// --- BUSCADOR BINANCE (DIRECTO VE.DOLARAPI.COM) ---
 window.fetchBinanceOnly = async () => {
-    let p2pRate = 0;
-    const endpoints = [
-        'https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance',
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://pydolarvenezuela-api.vercel.app/api/v1/dollar/unit/binance')
-    ];
-
-    for (let url of endpoints) {
-        try {
-            const r = await fetch(url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
-            const d = await r.json();
-            if (d && d.price) { p2pRate = parseFloat(d.price); break; }
-        } catch (e) { }
-    }
-
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
 
-    if (p2pRate > 0) {
-        input.value = p2pRate.toFixed(2);
-        badge.innerText = "AUTO";
-        sync('ratebinance');
-    } else {
+    try {
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares/binance?t=' + Date.now());
+        const d = await r.json();
+        
+        if (d && d.promedio) {
+            input.value = parseFloat(d.promedio).toFixed(2);
+            badge.innerText = "AUTO";
+            sync('ratebinance');
+        } else {
+            throw new Error("Sin datos");
+        }
+    } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBinance(), 1000); // Si falla, pasa a manual solo
+        setTimeout(() => window.toggleBinance(), 1000);
     }
 };
 
 window.onload = () => {
-    getEl('rateBinance').value = lastManualBinance;
-    getEl('rateBcv').value = lastSavedBcv;
-    
-    // Arranca trayendo ambas de la API automáticamente
+    // Al cargar, buscamos ambas desde la API solicitada
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // MAGIA AUTO-DESHACER: Si borras el número por error y sales de la caja, te lo devuelve
+    // MAGIA AUTO-DESHACER (Binance)
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
             if(!val || parseFloat(val) <= 0) {
-                e.target.value = lastManualBinance; // Auto-Deshacer
+                e.target.value = binanceMemoryStack[binanceMemoryStack.length - 1]; 
                 sync('ratebinance');
             } else {
-                lastManualBinance = val; // Guarda el nuevo número bueno
+                binanceMemoryStack.push(val);
+                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
                 localStorage.setItem('vgap_binance', val);
             }
         }
     });
 
+    // MAGIA AUTO-DESHACER (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
             if(!val || parseFloat(val) <= 0) {
-                e.target.value = lastSavedBcv; // Auto-Deshacer
+                e.target.value = bcvMemoryStack[bcvMemoryStack.length - 1]; 
                 sync('ratebcv');
             } else {
-                lastSavedBcv = val;
+                bcvMemoryStack.push(val);
+                if(bcvMemoryStack.length > 10) bcvMemoryStack.shift();
                 localStorage.setItem('vgap_bcv', val);
             }
         }
     });
     
-    // Sincronización en vivo mientras escribes
+    // Sincronización en vivo
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', (e) => {
             sync(id.replace('input', '').toLowerCase());
