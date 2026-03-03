@@ -70,39 +70,31 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (TUMBA-CACHÉ SIMPLE + HORA DE LA API) ---
+// --- BUSCADOR BCV ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        // Truco universal anti-caché: Añadir los milisegundos exactos al final del link.
-        // No usamos cabeceras raras para que el navegador no nos bloquee por seguridad CORS.
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
-        
         const bcvData = data.find(item => item.fuente === 'oficial');
         
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
-            
-            // ¡Usamos la fecha exacta que viene de la API que tú descubriste!
             const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
-            
             badge.innerText = "AUTO";
             sync('ratebcv');
-        } else {
-            throw new Error("Sin datos de BCV");
-        }
+        } else { throw new Error("Sin datos de BCV"); }
     } catch (e) {
         badge.innerText = "ERROR";
         setTimeout(() => window.toggleBcv(), 1000);
     }
 };
 
-// --- BUSCADOR BINANCE (TUMBA-CACHÉ SIMPLE) ---
+// --- BUSCADOR BINANCE ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
@@ -110,21 +102,99 @@ window.fetchBinanceOnly = async () => {
     try {
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
-        
         const paraleloData = data.find(item => item.fuente === 'paralelo');
         
         if (paraleloData && paraleloData.promedio) {
             input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
-        } else {
-            throw new Error("Sin datos de Paralelo");
-        }
+        } else { throw new Error("Sin datos de Paralelo"); }
     } catch (e) {
         badge.innerText = "ERROR";
         setTimeout(() => window.toggleBinance(), 1000);
     }
 };
+
+// ==========================================
+// EL EASTER EGG: MODAL DEL GRÁFICO (SEGURO)
+// ==========================================
+window.openChartModal = () => {
+    getEl('chartModal').classList.remove('hidden');
+    getEl('chartBody').innerHTML = '<p style="text-align:center; font-size:12px; color:var(--text-dim);">Cargando historial...</p>';
+    fetchAndDrawCharts(); // Solo consume internet cuando abres el modal
+};
+
+window.closeChartModal = () => {
+    getEl('chartModal').classList.add('hidden');
+};
+
+const fetchAndDrawCharts = async () => {
+    try {
+        const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
+        const histData = await r.json();
+        
+        // Filtra los últimos 7 días de cada uno (vienen de nuevo a viejo, así que invertimos)
+        const histOficial = histData.filter(h => h.fuente === 'oficial').slice(0, 7).reverse();
+        const histParalelo = histData.filter(h => h.fuente === 'paralelo').slice(0, 7).reverse();
+        
+        // Inyectamos el HTML del gráfico dentro del modal
+        let htmlContent = "";
+        
+        if(histParalelo.length > 0) {
+            const minP = Math.min(...histParalelo.map(h => h.promedio));
+            const maxP = Math.max(...histParalelo.map(h => h.promedio));
+            htmlContent += `
+                <div class="chart-box">
+                    <div class="chart-title"><span>PARALELO (7 DÍAS)</span> <span style="color:var(--orange)">Bs ${maxP.toFixed(2)}</span></div>
+                    <div class="chart-svg-wrap">
+                        <svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:100%; height:100%; overflow:visible;">
+                            <path class="spark-line binance" d="${createSVGPath(histParalelo)}"></path>
+                        </svg>
+                    </div>
+                </div>`;
+        }
+        
+        if(histOficial.length > 0) {
+            const minO = Math.min(...histOficial.map(h => h.promedio));
+            const maxO = Math.max(...histOficial.map(h => h.promedio));
+            htmlContent += `
+                <div class="chart-box">
+                    <div class="chart-title"><span>BCV (7 DÍAS)</span> <span style="color:var(--blue)">Bs ${maxO.toFixed(2)}</span></div>
+                    <div class="chart-svg-wrap">
+                        <svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:100%; height:100%; overflow:visible;">
+                            <path class="spark-line bcv" d="${createSVGPath(histOficial)}"></path>
+                        </svg>
+                    </div>
+                </div>`;
+        }
+        
+        getEl('chartBody').innerHTML = htmlContent || "<p>Sin datos históricos.</p>";
+        
+    } catch (e) {
+        getEl('chartBody').innerHTML = '<p style="color:var(--red); text-align:center;">Error al cargar el gráfico.</p>';
+    }
+};
+
+// Generador matemático de la línea del gráfico
+const createSVGPath = (dataArray) => {
+    const prices = dataArray.map(h => parseFloat(h.promedio));
+    const minPrice = Math.min(...prices) * 0.999; 
+    const maxPrice = Math.max(...prices) * 1.001; 
+    
+    if (minPrice === maxPrice) return `M 0,15 L 100,15`; // Línea recta si no cambia
+    
+    let path = "M ";
+    const stepX = 100 / (prices.length - 1);
+    
+    for (let i = 0; i < prices.length; i++) {
+        const x = i * stepX;
+        const y = 30 - ((prices[i] - minPrice) / (maxPrice - minPrice) * 30);
+        path += `${x.toFixed(2)},${y.toFixed(2)} `;
+        if (i < prices.length - 1) path += " L ";
+    }
+    return path;
+};
+// ==========================================
 
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
