@@ -1,80 +1,125 @@
 const getEl = (id) => document.getElementById(id);
 
-let isBcvApi = true; 
-let isBinanceApi = true; 
+let isBcvApi = false; 
+let isBinanceApi = false; 
 
 // Memoria para el auto-deshacer manual
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
+// --- ARRANQUE DESDE LA PANTALLA DE BIENVENIDA ---
+window.startApp = (mode) => {
+    // Oculta la pantalla de bienvenida con un efecto suave
+    const overlay = getEl('welcomeOverlay');
+    overlay.style.opacity = '0';
+    setTimeout(() => { overlay.style.display = 'none'; }, 400);
+
+    // Enciende la App quitando el desenfoque
+    const app = getEl('mainApp');
+    app.style.filter = 'none';
+    app.style.pointerEvents = 'auto';
+
+    // Aplica la elección del usuario
+    if (mode === 'auto') {
+        isBcvApi = true;
+        isBinanceApi = true;
+        
+        getEl('badgeBcv').innerText = "...";
+        getEl('badgeBcv').className = "mode-badge api-bcv";
+        getEl('rateBcv').disabled = true;
+        getEl('bcvContainer').classList.remove('unlocked');
+        
+        getEl('badgeBinance').innerText = "...";
+        getEl('badgeBinance').className = "mode-badge api-binance";
+        getEl('rateBinance').disabled = true;
+
+        fetchBcvOnly();
+        fetchBinanceOnly();
+
+    } else {
+        isBcvApi = false;
+        isBinanceApi = false;
+        
+        getEl('badgeBcv').innerText = "MANUAL";
+        getEl('badgeBcv').className = "mode-badge manual-mode";
+        getEl('rateBcv').disabled = false;
+        getEl('rateBcv').value = bcvMemoryStack[bcvMemoryStack.length - 1];
+        getEl('bcvContainer').classList.add('unlocked');
+        
+        getEl('badgeBinance').innerText = "MANUAL";
+        getEl('badgeBinance').className = "mode-badge manual-mode";
+        getEl('rateBinance').disabled = false;
+        getEl('rateBinance').value = binanceMemoryStack[binanceMemoryStack.length - 1];
+        
+        getEl('lastUpdate').innerText = "Modo Manual Activado";
+        sync('ratebcv');
+    }
+};
+
 // --- INTERRUPTOR DE TEMA (SOL/LUNA) ---
 window.toggleThemeSwitch = () => {
-    const isDark = getEl('themeToggleCheckbox').checked;
-    document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
+    const isLight = getEl('themeToggleCheckbox').checked;
+    document.body.setAttribute('data-theme', isLight ? 'light' : 'dark');
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', isLight ? '#F2F2F7' : '#000000');
 };
 
-// --- LÓGICA BCV ---
+// --- CONTROLES MANUALES INDIVIDUALES ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
-    const badge = getEl('badgeBcv');
-    const input = getEl('rateBcv');
-    const container = getEl('bcvContainer');
-    
     if (isBcvApi) {
-        badge.innerText = "...";
-        badge.className = "mode-badge api-bcv";
-        input.disabled = true;
-        container.classList.remove('unlocked');
+        getEl('badgeBcv').innerText = "...";
+        getEl('badgeBcv').className = "mode-badge api-bcv";
+        getEl('rateBcv').disabled = true;
+        getEl('bcvContainer').classList.remove('unlocked');
         await fetchBcvOnly();
     } else {
-        badge.innerText = "MANUAL";
-        badge.className = "mode-badge manual-mode";
-        input.disabled = false;
-        input.value = bcvMemoryStack[bcvMemoryStack.length - 1];
+        getEl('badgeBcv').innerText = "MANUAL";
+        getEl('badgeBcv').className = "mode-badge manual-mode";
+        getEl('rateBcv').disabled = false;
+        getEl('rateBcv').value = bcvMemoryStack[bcvMemoryStack.length - 1];
+        getEl('bcvContainer').classList.add('unlocked');
         sync('ratebcv');
-        container.classList.add('unlocked');
-        input.focus();
+        getEl('rateBcv').focus();
     }
 };
 
-// --- LÓGICA BINANCE ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
-    const badge = getEl('badgeBinance');
-    const input = getEl('rateBinance');
-    
     if (isBinanceApi) {
-        badge.innerText = "...";
-        badge.className = "mode-badge api-binance";
-        input.disabled = true;
+        getEl('badgeBinance').innerText = "...";
+        getEl('badgeBinance').className = "mode-badge api-binance";
+        getEl('rateBinance').disabled = true;
         await fetchBinanceOnly(); 
     } else {
-        badge.innerText = "MANUAL";
-        badge.className = "mode-badge manual-mode";
-        input.disabled = false;
-        input.value = binanceMemoryStack[binanceMemoryStack.length - 1];
+        getEl('badgeBinance').innerText = "MANUAL";
+        getEl('badgeBinance').className = "mode-badge manual-mode";
+        getEl('rateBinance').disabled = false;
+        getEl('rateBinance').value = binanceMemoryStack[binanceMemoryStack.length - 1];
         sync('ratebinance');
-        input.focus();
+        getEl('rateBinance').focus();
     }
 };
 
-// --- BUSCADOR BCV (LEYENDO EL JSON QUE DESCUBRISTE) ---
+// --- BUSCADOR BCV (CON DESTRUCTOR DE CACHÉ AGRESIVO) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
-        const data = await r.json();
+        // Truco Anti-Caché: Forzamos a descargar datos nuevos añadiendo código aleatorio y Headers estrictos
+        const nocacheUrl = 'https://ve.dolarapi.com/v1/dolares?v=' + new Date().getTime() + '&rnd=' + Math.random();
         
-        // Buscamos la fuente "oficial" en el array
+        const r = await fetch(nocacheUrl, {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' }
+        });
+        
+        const data = await r.json();
         const bcvData = data.find(item => item.fuente === 'oficial');
         
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
             
-            // Actualizamos la fecha
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
             
@@ -89,16 +134,20 @@ window.fetchBcvOnly = async () => {
     }
 };
 
-// --- BUSCADOR BINANCE/PARALELO (LEYENDO EL JSON QUE DESCUBRISTE) ---
+// --- BUSCADOR PARALELO/BINANCE (CON DESTRUCTOR DE CACHÉ AGRESIVO) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
 
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
-        const data = await r.json();
+        const nocacheUrl = 'https://ve.dolarapi.com/v1/dolares?v=' + new Date().getTime() + '&rnd=' + Math.random();
         
-        // Buscamos la fuente "paralelo" en el array
+        const r = await fetch(nocacheUrl, {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' }
+        });
+        
+        const data = await r.json();
         const paraleloData = data.find(item => item.fuente === 'paralelo');
         
         if (paraleloData && paraleloData.promedio) {
@@ -115,11 +164,11 @@ window.fetchBinanceOnly = async () => {
 };
 
 window.onload = () => {
-    // Al cargar, buscamos ambas desde la API automáticamente
-    fetchBcvOnly();
-    fetchBinanceOnly(); 
+    // La app arranca esperando que toques el botón de la Pantalla de Bienvenida
+    getEl('rateBinance').value = binanceMemoryStack[binanceMemoryStack.length - 1];
+    getEl('rateBcv').value = bcvMemoryStack[bcvMemoryStack.length - 1];
     
-    // MAGIA AUTO-DESHACER (Binance)
+    // MAGIA AUTO-DESHACER
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -134,7 +183,6 @@ window.onload = () => {
         }
     });
 
-    // MAGIA AUTO-DESHACER (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
