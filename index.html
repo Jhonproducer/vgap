@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#F2F2F7">
+    <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
     
     <title>V-Gap Ultra</title>
@@ -15,7 +15,28 @@
 </head>
 <body>
 
-<div class="app-container" id="mainApp">
+<div id="welcomeOverlay" class="welcome-overlay">
+  <div class="welcome-card">
+    <div class="logo-area" style="justify-content:center; margin-bottom:15px; font-size: 28px;">
+      <div class="logo-icon" style="width: 40px; height: 40px; font-size: 26px;">V</div>
+      <span class="logo-text">Gap</span>
+    </div>
+    <h2>Elige tu Modo</h2>
+    <p>Selecciona cómo deseas que arranquen las tasas de cambio hoy:</p>
+    
+    <button class="welcome-btn btn-auto" onclick="startApp('auto')">
+      <strong>⚡ MODO AUTOMÁTICO</strong>
+      <span>Conecta con ve.dolarapi.com para extraer las tasas BCV y Paralelo en tiempo real.</span>
+    </button>
+    
+    <button class="welcome-btn btn-manual" onclick="startApp('manual')">
+      <strong>✍️ MODO MANUAL</strong>
+      <span>Inicia con las cajas liberadas para que escribas tus propias tasas desde cero.</span>
+    </button>
+  </div>
+</div>
+
+<div class="app-container" id="mainApp" style="filter: blur(8px); pointer-events: none; transition: 0.5s;">
   <div class="top-nav">
     <div class="logo-area">
       <div class="logo-icon">V</div>
@@ -26,16 +47,16 @@
       <label class="theme-switch tooltip">
         <input type="checkbox" id="themeToggleCheckbox" onchange="toggleThemeSwitch()">
         <span class="slider-theme">
-          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
         </span>
-        <span class="tooltiptext">Modo Oscuro / Claro</span>
+        <span class="tooltiptext">Modo Claro / Oscuro</span>
       </label>
     </div>
   </div>
 
   <div class="header">
-    <div class="timestamp" id="lastUpdate">Actualizando...</div>
+    <div class="timestamp" id="lastUpdate">Esperando conexión...</div>
     <div class="gap-group tooltip">
       <div id="brechaBadge" class="gap-badge">0.00%</div>
       <div id="factorBadge" class="factor-text">1.00x</div>
