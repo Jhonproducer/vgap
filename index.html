@@ -67,12 +67,12 @@
           </svg>
           BINANCE ⓘ <span class="tooltiptext">Tasa P2P Venta USDT.</span>
         </label>
-        <div id="badgeBinance" class="mode-badge manual-mode tooltip" onclick="restoreBinance()">
-          DESHACER
-          <span class="tooltiptext">Recupera tu última tasa</span>
+        <div id="badgeBinance" class="mode-badge api-binance tooltip" onclick="toggleBinance()">
+          AUTO
+          <span class="tooltiptext">Tocar para modo MANUAL</span>
         </div>
       </div>
-      <input type="number" id="rateBinance" inputmode="decimal" step="0.01">
+      <input type="number" id="rateBinance" inputmode="decimal" step="0.01" disabled>
     </div>
 
     <div class="input-field">
