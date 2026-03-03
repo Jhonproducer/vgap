@@ -11,7 +11,6 @@
     <link rel="manifest" href="manifest.json">
     
     <title>V-Gap Ultra</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -30,7 +29,7 @@
     </div>
 </div>
 
-<div class="app-container" id="mainApp">
+<div class="app-container" id="mainApp" style="opacity: 0;">
   <div class="top-nav">
     <div class="logo-area">
       <div class="logo-icon">V</div>
@@ -52,14 +51,9 @@
   <div class="header">
     <div class="timestamp" id="lastUpdate">Actualizando...</div>
     <div class="gap-group tooltip">
-      <button class="mini-chart-btn" onclick="openChartModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-      </button>
-      <div class="gap-texts">
-          <div id="brechaBadge" class="gap-badge">0.00%</div>
-          <div id="factorBadge" class="factor-text">1.00x</div>
-      </div>
-      <span class="tooltiptext">Tocar para ver historial P2P vs BCV.</span>
+      <div id="brechaBadge" class="gap-badge">0.00%</div>
+      <div id="factorBadge" class="factor-text">1.00x</div>
+      <span class="tooltiptext">Diferencia porcentual y factor entre Paralelo y BCV.</span>
     </div>
   </div>
 
@@ -72,7 +66,7 @@
             <circle cx="50" cy="50" r="42" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
             <text x="50" y="62" text-anchor="middle" fill="#FFFFFF" font-size="32" font-family="Times New Roman, serif" font-weight="bold" letter-spacing="1">BCV</text>
           </svg>
-          BCV
+          BCV ⓘ <span class="tooltiptext">Tasa oficial del Banco Central.</span>
         </label>
         <div id="badgeBcv" class="mode-badge api-bcv" onclick="toggleBcv()">AUTO</div>
       </div>
@@ -85,7 +79,7 @@
           <svg viewBox="0 0 24 24" class="mini-icon binance-logo">
             <path fill="#F3BA2F" d="M11.996 9.604L9.593 12l2.403 2.396L14.4 12l-2.404-2.396zM11.996 2.396L16.8 7.2l-2.402 2.404-2.402-2.404-2.403 2.404L7.19 7.2l4.806-4.804zM16.8 16.8l2.402-2.404L21.604 12l-2.402-2.404-2.404 2.404 2.404 2.404L16.8 16.8zm-9.604 0L4.793 14.4l2.403-2.404L4.793 9.592 2.39 12l2.403 2.404L7.196 16.8zm4.8 4.804L7.19 16.8l2.403-2.404 2.403 2.404 2.402-2.404L16.8 16.8l-4.804 4.8z"/>
           </svg>
-          PARALELO
+          PARALELO ⓘ <span class="tooltiptext">Tasa Paralelo / Binance P2P.</span>
         </label>
         <div id="badgeBinance" class="mode-badge api-binance" onclick="toggleBinance()">AUTO</div>
       </div>
@@ -93,18 +87,18 @@
     </div>
 
     <div class="input-field">
-      <label>$ BCV</label>
+      <label class="tooltip">$ BCV ⓘ <span class="tooltiptext">Dólares a tasa oficial.</span></label>
       <input type="number" id="inputUsd" inputmode="decimal" placeholder="0.00">
     </div>
     
     <div class="input-field highlight-border">
-      <label>USDT (Inc. 0.06)</label>
+      <label class="tooltip">USDT ⓘ <span class="tooltiptext">Cripto dólares (Inc. comisión 0.06).</span></label>
       <input type="number" id="inputUsdt" inputmode="decimal" placeholder="0.00">
     </div>
 
     <div class="input-field full-width">
       <div class="label-row">
-        <label>BOLÍVARES (Bs)</label>
+        <label class="tooltip">BOLÍVARES (Bs) ⓘ <span class="tooltiptext">Monto total en moneda nacional.</span></label>
         <button class="icon-btn-copy" onclick="copyInputBs()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
@@ -122,21 +116,9 @@
       <span>COPIAR MONTO</span>
     </button>
     <div class="vender-info">
-      Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label">$ BCV</span>
+      Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
     </div>
   </div>
-</div>
-
-<div id="chartModal" class="modal-overlay hidden">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>📈 HISTÓRICO (7 DÍAS)</h3>
-            <button class="btn-close-modal" onclick="closeChartModal()">✖</button>
-        </div>
-        <div class="modal-body">
-            <canvas id="historyChart" width="100%" height="70"></canvas>
-        </div>
-    </div>
 </div>
 
 <script src="script.js"></script>
