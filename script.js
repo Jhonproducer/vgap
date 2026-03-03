@@ -3,7 +3,6 @@ const getEl = (id) => document.getElementById(id);
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
-// Memoria para el auto-deshacer manual
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
@@ -50,7 +49,7 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- LÓGICA BINANCE / PARALELO ---
+// --- LÓGICA BINANCE ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
@@ -71,12 +70,14 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (CON TUMBA-CACHÉ Y HORA DE API) ---
+// --- BUSCADOR BCV (TUMBA-CACHÉ SIMPLE + HORA DE LA API) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
+        // Truco universal anti-caché: Añadir los milisegundos exactos al final del link.
+        // No usamos cabeceras raras para que el navegador no nos bloquee por seguridad CORS.
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
         
@@ -85,6 +86,7 @@ window.fetchBcvOnly = async () => {
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
             
+            // ¡Usamos la fecha exacta que viene de la API que tú descubriste!
             const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
@@ -96,11 +98,11 @@ window.fetchBcvOnly = async () => {
         }
     } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000); 
+        setTimeout(() => window.toggleBcv(), 1000);
     }
 };
 
-// --- BUSCADOR PARALELO ---
+// --- BUSCADOR BINANCE (TUMBA-CACHÉ SIMPLE) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
@@ -137,7 +139,6 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // MAGIA AUTO-DESHACER (Binance)
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -152,7 +153,6 @@ window.onload = () => {
         }
     });
 
-    // MAGIA AUTO-DESHACER (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
@@ -219,3 +219,4 @@ window.copyInputBs = async () => {
 };
 
 window.resetAll = () => { ['inputUsd', 'inputUsdt', 'inputBs'].forEach(id => getEl(id).value = ""); updateUI(); };
+
