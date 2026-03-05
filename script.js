@@ -23,7 +23,23 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    renderActiveChartGraph(); // forzar repintar si despliegas gráfica theme visual colors map switch
+    
+    // Actualizar colores del gráfico interactivo si está abierto
+    if(typeof historicalChartInstance !== 'undefined' && historicalChartInstance) {
+        const textColor = isDark ? '#8E8E93' : '#636366';
+        const gridColor = isDark ? '#333335' : '#D1D1D6';
+        const tooltipBg = isDark ? 'rgba(28,28,30,0.95)' : 'rgba(255,255,255,0.95)';
+        const tooltipText = isDark ? '#FFFFFF' : '#000000';
+        
+        historicalChartInstance.options.scales.x.ticks.color = textColor;
+        historicalChartInstance.options.scales.y.ticks.color = textColor;
+        historicalChartInstance.options.scales.y.grid.color = gridColor;
+        historicalChartInstance.options.plugins.tooltip.backgroundColor = tooltipBg;
+        historicalChartInstance.options.plugins.tooltip.titleColor = tooltipText;
+        historicalChartInstance.options.plugins.tooltip.bodyColor = tooltipText;
+        historicalChartInstance.options.plugins.tooltip.borderColor = gridColor;
+        historicalChartInstance.update();
+    }
 };
 
 // --- LÓGICA BCV ---
@@ -80,6 +96,7 @@ window.fetchBcvOnly = async () => {
         const bcvData = data.find(item => item.fuente === 'oficial');
         if (bcvData && bcvData.promedio) {
             input.value = parseFloat(bcvData.promedio).toFixed(2);
+            // Usamos tu API para la fecha exacta de la última actualización real
             const apiDate = new Date(bcvData.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
@@ -114,7 +131,6 @@ window.fetchBinanceOnly = async () => {
     }
 };
 
-// ======= CARGADOR ROOT DE INIT EVENT LISTNER DEL COMPLEJO ===========
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
@@ -127,7 +143,8 @@ window.onload = () => {
 
     fetchBcvOnly();
     fetchBinanceOnly(); 
-    // Enganche para el Modulo gráfico Historial de background invisible!
+    
+    // Carga los datos del gráfico en secreto por detrás para que estén listos
     backgroundPreloadChart(); 
 
     getEl('rateBinance').addEventListener('blur', (e) => {
@@ -211,246 +228,145 @@ window.resetAll = () => { ['inputUsd', 'inputUsdt', 'inputBs'].forEach(id => get
 
 
 // =========================================================================
-// MÓDULO INTELIGENTE "GRÁFICO BINANCE HISTORIAS INTERACTIVAS CROSSHAIR NATIVAS" 
+// MÓDULO INTELIGENTE "GRÁFICO BINANCE" (CON CHART.JS ESTABLE)
 // =========================================================================
 
-let vGapChartHistory = { oficial: [], paralelo: [] }; 
+let rawChartData = { oficial: { labels: [], data: [] }, paralelo: { labels: [], data: [] } };
+let historicalChartInstance = null;
 let currentGraphType = 'paralelo'; 
 let chartIsExpanded = false;
 
+// 1. Descarga y procesa la data plana que mostraste, de forma silenciosa
+async function backgroundPreloadChart() {
+    try {
+        const resp = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
+        const data = await resp.json();
+        
+        ['oficial', 'paralelo'].forEach(fuente => {
+            // Filtramos
+            let filtered = data.filter(d => d.fuente === fuente);
+            
+            // Ordenamos del más viejo al más nuevo usando la "fecha"
+            // Se le suma T12:00:00 para evitar que la zona horaria reste un día
+            filtered.sort((a, b) => new Date(a.fecha + "T12:00:00") - new Date(b.fecha + "T12:00:00"));
+            
+            // Guardamos solo los últimos 30 días para no saturar
+            filtered = filtered.slice(-30);
+            
+            rawChartData[fuente].labels = filtered.map(item => {
+                let d = new Date(item.fecha + "T12:00:00");
+                return d.toLocaleDateString('es-VE', {day: '2-digit', month: 'short'}); // Ejemplo: 14 feb
+            });
+            rawChartData[fuente].data = filtered.map(item => parseFloat(item.promedio));
+        });
+    } catch(e) {
+        console.error("Error cargando históricos", e);
+    }
+}
+
+// 2. Control del Acordeón
 window.toggleChart = () => {
     chartIsExpanded = !chartIsExpanded;
     getEl('chartContent').classList.toggle('collapsed');
     getEl('chartChevron').classList.toggle('rotate');
     
-    // Fuerza Resize Render nativo solo luego del display-grid CSS expansion mapping!
     if(chartIsExpanded) {
+        // Damos 300ms a que el CSS abra la caja, y luego pintamos el gráfico
         setTimeout(() => {
-            renderActiveChartGraph(); 
-        }, 150);
+            if(!historicalChartInstance && rawChartData.paralelo.data.length > 0) {
+                renderChart();
+            }
+        }, 300);
     }
 }
 
+// 3. Cambio de Pestañas (P2P vs BCV)
 window.switchChartType = (type) => {
     currentGraphType = type;
     getEl('tabBinChart').classList.toggle('active', type === 'paralelo');
     getEl('tabBcvChart').classList.toggle('active', type === 'oficial');
-    renderActiveChartGraph(); 
+    
+    if(historicalChartInstance) {
+        historicalChartInstance.data = getChartDataset();
+        historicalChartInstance.update();
+    } 
 }
 
-const formatChartDateLabel = (date) => {
-    const month = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][date.getMonth()];
-    return `${String(date.getDate()).padStart(2,'0')} ${month}`;
+// 4. El motor de dibujo (Chart.js interactivo)
+function renderChart() {
+    const ctx = getEl('ultraHistoryCanvas').getContext('2d');
+    
+    // Leemos el tema actual
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#8E8E93' : '#636366';
+    const gridColor = isDark ? '#333335' : '#D1D1D6';
+    const tooltipBg = isDark ? 'rgba(28,28,30,0.95)' : 'rgba(255,255,255,0.95)';
+    const tooltipText = isDark ? '#FFFFFF' : '#000000';
+    
+    historicalChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: getChartDataset(),
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // Fundamental para que respete el contenedor fijo y no desborde
+            plugins: {
+                legend: { display: false },
+                // Aquí nace la magia interactiva: la burbuja al pasar el dedo
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: tooltipBg,
+                    titleColor: tooltipText,
+                    bodyColor: tooltipText,
+                    borderColor: gridColor,
+                    borderWidth: 1,
+                    padding: 10,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return 'Precio: ' + new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(context.parsed.y) + ' Bs';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: textColor, maxTicksLimit: 7 } // Máximo 7 fechas abajo para no amontonar
+                },
+                y: {
+                    grid: { color: gridColor, borderDash: [5, 5] },
+                    ticks: { color: textColor }
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
+            elements: {
+                line: { tension: 0.4 }, // Curvas suaves y orgánicas
+                point: { radius: 0, hitRadius: 15, hoverRadius: 6 } // Los puntos son invisibles hasta que los tocas
+            }
+        }
+    });
 }
 
-async function backgroundPreloadChart() {
-   // Obtiene historicos discretamente desde el api publico por default, o inyecta simulaciones mock reales base-API visual por si no llegan las propiedades puras del arbol / restricciones de Cors venezuela etc !
-   try {
-       const resp = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
-       const dapiNodesArray = await resp.json();
-       let foundValidosOfi = [], foundValidosPara = [];
-       
-       if (Array.isArray(dapiNodesArray)) {
-           // Sistema inteligente buscando formato objeto profundo historico VS Array directo.
-           dapiNodesArray.forEach(k => {
-               const tipoCasa = String(k.fuente || k.casa || k.nombre || "").toLowerCase();
-               const isOfi = (tipoCasa === 'oficial');
-               const targetPush = isOfi ? foundValidosOfi : foundValidosPara; 
-
-               if (k.historico && Array.isArray(k.historico)) {
-                   k.historico.forEach(pnt => { 
-                       let dt = new Date(pnt.fecha || pnt.fechaActualizacion || new Date());
-                       if(!isNaN(dt.getTime())) targetPush.push({ d: dt, val: parseFloat(pnt.promedio || pnt.valor || pnt.venta || 0) });
-                   });
-               } else {
-                   let dt2 = new Date(k.fecha || k.fechaActualizacion || new Date());
-                   if(!isNaN(dt2.getTime())) targetPush.push({ d: dt2, val: parseFloat(k.promedio || k.valor || k.venta || 0) });
-               }
-           });
-       }
-
-       // Si viene totalmente vacio inyectamos base generadora matematica estilo Binance trading nativa (Siempre queda estético frente a un API sin estructura histórica visible hoy! Mantiene al sistema hermoso):
-       vGapChartHistory.oficial = (foundValidosOfi.length < 5) ? genMock('bcv') : foundValidosOfi;
-       vGapChartHistory.paralelo = (foundValidosPara.length < 5) ? genMock('bin') : foundValidosPara;
-
-       vGapChartHistory.oficial.sort((a,b) => a.d.getTime() - b.d.getTime());
-       vGapChartHistory.paralelo.sort((a,b) => a.d.getTime() - b.d.getTime());
-       
-   } catch(e) {
-       vGapChartHistory.oficial = genMock('bcv');
-       vGapChartHistory.paralelo = genMock('bin');
-   }
-}
-
-// Emula un comportamiento pseudo-fluctuante para los "V-Gaps visuales mock historico caida/alzas suaves." basado estrictamente del valor principal de calculadora que ves a tasa presente actual ! (Mapeo UX-perfect fallback). 
-function genMock(originSourceVariblesStateFallbackBaseParamsMapIndexConfigTypeDataArrayFlowGeneratorKeyLimitsSetupModeTreeLimitsValueParams) {
-   let rootRatesBaseValuesInputsMappedSourceConfiguredGlobalActiveStatusNow = originSourceVariblesStateFallbackBaseParamsMapIndexConfigTypeDataArrayFlowGeneratorKeyLimitsSetupModeTreeLimitsValueParams === 'bcv' ? parseFloat(bcvMemoryStack[bcvMemoryStack.length-1])|| 41.0 : parseFloat(binanceMemoryStack[binanceMemoryStack.length-1])||49.5;
-   
-   let simulatedBaseArrayObj = []; 
-   let hoyBaseNowGenTimestampPointRootRef = new Date();
-   
-   let walkerVarLimitsCurveMappedStatusTreeLogicPointIndexStackGeneratorPointRefConfigurablesPriceTrend = rootRatesBaseValuesInputsMappedSourceConfiguredGlobalActiveStatusNow * 0.94; // base del mes start pseudo visual 
-   
-   for (let nOffsetT = 30; nOffsetT >= 0; nOffsetT--) {
-      let dxTmpIndexPointMap = new Date(hoyBaseNowGenTimestampPointRootRef);
-      dxTmpIndexPointMap.setDate(dxTmpIndexPointMap.getDate() - nOffsetT);
-      
-      // Aleatoriza entre micro baja suave o alta diaria típica del rubro
-      walkerVarLimitsCurveMappedStatusTreeLogicPointIndexStackGeneratorPointRefConfigurablesPriceTrend = walkerVarLimitsCurveMappedStatusTreeLogicPointIndexStackGeneratorPointRefConfigurablesPriceTrend + (walkerVarLimitsCurveMappedStatusTreeLogicPointIndexStackGeneratorPointRefConfigurablesPriceTrend * (Math.random() * 0.012 - 0.003)); 
-      
-      simulatedBaseArrayObj.push({ d: dxTmpIndexPointMap, val: walkerVarLimitsCurveMappedStatusTreeLogicPointIndexStackGeneratorPointRefConfigurablesPriceTrend });
-   }
-   
-   simulatedBaseArrayObj[simulatedBaseArrayObj.length -1].val = rootRatesBaseValuesInputsMappedSourceConfiguredGlobalActiveStatusNow; // Match current calculator
-   return simulatedBaseArrayObj;
-}
-
-
-// --- DIBUJADO GRAFICO MOTOR LOGICO RENDER ---- //
-
-function renderActiveChartGraph() {
-   const cvs = getEl('ultraHistoryCanvas');
-   if (!cvs || !chartIsExpanded) return;
-   
-   const themeKey = document.body.getAttribute('data-theme') || 'light';
-   const uiRed = '#FF453A'; 
-   const uiGreen = '#32D74B';
-   
-   // Soporte full-retina iOS/Apple perfect-sharp nativo bounds limits fix properties scale pixels config array!!
-   const rectBound = cvs.parentElement.getBoundingClientRect();
-   if(rectBound.width === 0) return;
-
-   const dprScaleFactorRatioScreenDPIIndexTreeBounds = window.devicePixelRatio || 1;
-   cvs.width = rectBound.width * dprScaleFactorRatioScreenDPIIndexTreeBounds;
-   cvs.height = rectBound.height * dprScaleFactorRatioScreenDPIIndexTreeBounds;
-   const ctx = cvs.getContext('2d');
-   ctx.scale(dprScaleFactorRatioScreenDPIIndexTreeBounds, dprScaleFactorRatioScreenDPIIndexTreeBounds);
-   
-   let logicalPixelsW = rectBound.width;
-   let logicalPixelsH = rectBound.height;
-   
-   // Extracción lista actual
-   const dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits = vGapChartHistory[currentGraphType] || [];
-   if(dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.length === 0) return;
-   
-   // Lógicas matematicas 
-   const mapRatesExtrapolable = dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.map(v => v.val);
-   const absMaxPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMaxLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef = Math.max(...mapRatesExtrapolable);
-   const absMinPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMinLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef = Math.min(...mapRatesExtrapolable);
-   
-   const vTrendLimitsFlowStatusValNodeTrendLimitsParamsRngeGapDifferenceHeightConfigParamsPointYRefVar = absMaxPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMaxLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef - absMinPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMinLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef === 0 ? 1 : absMaxPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMaxLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef - absMinPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMinLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef;
-   const pTopPaddingLogicTrendOffsetLimitGapDifferenceFactorBaseScaleLogicPointFactorYRefsParamsMaxTopExtValMaxLimitTrendNodeScale = absMaxPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMaxLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef + (vTrendLimitsFlowStatusValNodeTrendLimitsParamsRngeGapDifferenceHeightConfigParamsPointYRefVar * 0.20); 
-   const pBotPaddingLogicTrendOffsetLimitGapDifferenceFactorBaseScaleLogicPointFactorYRefsParamsMinBotExtValMinLimitTrendNodeScale = absMinPointRefConfigStatusLogicTopExtrapolarNodeFlowValuesItemDataParamsBoundsPropertiesMinLogicSetStackFlowYPointVarMapSetParamsRefVarNodeModeExtremaParamsXExtremRef - (vTrendLimitsFlowStatusValNodeTrendLimitsParamsRngeGapDifferenceHeightConfigParamsPointYRefVar * 0.20); 
-
-   // Is Binance-Style up/down variation main general indicator colour match logic flow params limit config reference ? 
-   const originInitialParamFlowLogicReferenceStartIndexNodePriceLimitsMappedBoundsParamsStatusNodeReferenceValue = mapRatesExtrapolable[0];
-   const originEndingParamFlowLogicReferenceEndIndexNodePriceLimitsMappedBoundsParamsStatusNodeReferenceValue = mapRatesExtrapolable[mapRatesExtrapolable.length-1];
-   
-   const bModeMainBullTreeColorMappedThemeIndicatorNodeStateLimitsValueTypeRef = originEndingParamFlowLogicReferenceEndIndexNodePriceLimitsMappedBoundsParamsStatusNodeReferenceValue >= originInitialParamFlowLogicReferenceStartIndexNodePriceLimitsMappedBoundsParamsStatusNodeReferenceValue ? uiGreen : uiRed;
-   const themeFadeAreaUnderGradFillMainVisualTreeTypeBoundsPointMappedValueColourConfigIndexModeReferenceStyle = bModeMainBullTreeColorMappedThemeIndicatorNodeStateLimitsValueTypeRef === uiGreen ? 'rgba(50,215,75,0.25)' : 'rgba(255,69,58,0.25)';
-   
-   const updateLabelsIndexHUDLogicNodeMappedRefPointHoverXInteractionLimitsUIUXStatusParamsStatusTrendMappedMapReference = (pointIdxObjRefLimitsMappingTrendParamNodeScale) => {
-        let iRefTreeObjStateUIUXLogicPointerCursorPointNodePropertiesMapXParamsTypeRefsLogicLimitNodeStateLimitsTreeMappingValue = dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits[pointIdxObjRefLimitsMappingTrendParamNodeScale];
-        getEl('hudDate').innerText = formatChartDateLabel(iRefTreeObjStateUIUXLogicPointerCursorPointNodePropertiesMapXParamsTypeRefsLogicLimitNodeStateLimitsTreeMappingValue.d);
-        const lVarTextElemRefDataStringPointerMode = getEl('hudValue');
-        lVarTextElemRefDataStringPointerMode.innerText = new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(iRefTreeObjStateUIUXLogicPointerCursorPointNodePropertiesMapXParamsTypeRefsLogicLimitNodeStateLimitsTreeMappingValue.val) + ' Bs';
-        lVarTextElemRefDataStringPointerMode.style.color = iRefTreeObjStateUIUXLogicPointerCursorPointNodePropertiesMapXParamsTypeRefsLogicLimitNodeStateLimitsTreeMappingValue.val >= dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits[Math.max(0, pointIdxObjRefLimitsMappingTrendParamNodeScale - 1)].val ? uiGreen : uiRed;
-        
-        // draw render limits overlay logic loop pointer node tree map
-        drawPath(pointIdxObjRefLimitsMappingTrendParamNodeScale);
-   }
-
-   // Func core drawing line base generator map values parameters limits layout variables flow canvas scale tree X/Y mapping
-   function drawPath(focusIndexCursorStatusMapNodesValueStatusUXLimitsTrendParamStatusConfigIndexParamUXPropertiesLimitsMappingFlowLogicCrossRefLimitPointReferenceValOffsetFlowTypeLimitTrendPropertiesLogicPointTreePointerNodesValuePointerExtConfigExtExtremaValuesRefsRefRefStatusParamLimitTrendOffsetConfigUXNodeMapExtRefPointRefMapLimitsValuesPointerStateMapParamsTypeLogicXParamLimitTypeLimitStatusStateStateExtMapNodesFlow = null) {
-      ctx.clearRect(0,0, logicalPixelsW, logicalPixelsH);
-      
-      let fillGradientTreeModeTypeCanvasColorStylesTypeParamsThemeFillStatusLimitsStateTypeThemeModeTreeFlowPropertiesTypeAreaNodeMappedAreaConfigRefPointYAreaAreaStateRefColorAreaParamsTypeCanvasYAreaYNodeExtValuesYScaleMappingValuesLogicPointStateColorLogicValueStateTrendRefModeTrendLimitsUXParamFlowLimitsStatusTreeMappingValuesTrendNodeLimitsYModeTrendValueLogicParams= ctx.createLinearGradient(0, 0, 0, logicalPixelsH);
-      fillGradientTreeModeTypeCanvasColorStylesTypeParamsThemeFillStatusLimitsStateTypeThemeModeTreeFlowPropertiesTypeAreaNodeMappedAreaConfigRefPointYAreaAreaStateRefColorAreaParamsTypeCanvasYAreaYNodeExtValuesYScaleMappingValuesLogicPointStateColorLogicValueStateTrendRefModeTrendLimitsUXParamFlowLimitsStatusTreeMappingValuesTrendNodeLimitsYModeTrendValueLogicParams.addColorStop(0, themeFadeAreaUnderGradFillMainVisualTreeTypeBoundsPointMappedValueColourConfigIndexModeReferenceStyle);
-      fillGradientTreeModeTypeCanvasColorStylesTypeParamsThemeFillStatusLimitsStateTypeThemeModeTreeFlowPropertiesTypeAreaNodeMappedAreaConfigRefPointYAreaAreaStateRefColorAreaParamsTypeCanvasYAreaYNodeExtValuesYScaleMappingValuesLogicPointStateColorLogicValueStateTrendRefModeTrendLimitsUXParamFlowLimitsStatusTreeMappingValuesTrendNodeLimitsYModeTrendValueLogicParams.addColorStop(1, "rgba(0,0,0,0)");
-      
-      const ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam = [];
-      dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.forEach((ptRefPropertiesDataVarParamsTreeLimitsParamUXLogicRefValue, inIdxExtConfigDataPropertiesLimitsLimitPointerStateConfigTrendYParamsLimitXParamsRefModeLimitNodesYNodeNodeValueYRefRefYOffsetMapValuesStatusTrendReferenceUXTypeMapStatusLogicNodesValueXLimitsMapLogicStateNodesTypeStatusValuePointerValuesNode, arraObjDataArrayArrayMapStateLimitXExtStatusLogicPropertiesLimitsNodeStatusXLogicParamPoint) => {
-          let cxVarPointMapCanvasTreeLogicStatusYNodeOffsetScaleMapPointerTypeValueParamsRefMapConfigParamsRefPoint = (inIdxExtConfigDataPropertiesLimitsLimitPointerStateConfigTrendYParamsLimitXParamsRefModeLimitNodesYNodeNodeValueYRefRefYOffsetMapValuesStatusTrendReferenceUXTypeMapStatusLogicNodesValueXLimitsMapLogicStateNodesTypeStatusValuePointerValuesNode / (arraObjDataArrayArrayMapStateLimitXExtStatusLogicPropertiesLimitsNodeStatusXLogicParamPoint.length - 1)) * logicalPixelsW; 
-          let cyVarPointMapCanvasTreeLogicStatusYNodeOffsetScaleMapPointerTypeValueParamsRefMapConfigParamsRefPoint = logicalPixelsH - ((ptRefPropertiesDataVarParamsTreeLimitsParamUXLogicRefValue.val - pBotPaddingLogicTrendOffsetLimitGapDifferenceFactorBaseScaleLogicPointFactorYRefsParamsMinBotExtValMinLimitTrendNodeScale) / (pTopPaddingLogicTrendOffsetLimitGapDifferenceFactorBaseScaleLogicPointFactorYRefsParamsMaxTopExtValMaxLimitTrendNodeScale - pBotPaddingLogicTrendOffsetLimitGapDifferenceFactorBaseScaleLogicPointFactorYRefsParamsMinBotExtValMinLimitTrendNodeScale) * logicalPixelsH);
-          ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam.push({x: cxVarPointMapCanvasTreeLogicStatusYNodeOffsetScaleMapPointerTypeValueParamsRefMapConfigParamsRefPoint, y: cyVarPointMapCanvasTreeLogicStatusYNodeOffsetScaleMapPointerTypeValueParamsRefMapConfigParamsRefPoint, indexOrigValuesPropertiesRefsLimitsNodeTrendTypeTrendNodeValueLimitPointDataPointFlowTreeLimitStatePropertiesYUXStateLimitXPointerUXDataMapNodePointerPointerDataLimitsLimit: inIdxExtConfigDataPropertiesLimitsLimitPointerStateConfigTrendYParamsLimitXParamsRefModeLimitNodesYNodeNodeValueYRefRefYOffsetMapValuesStatusTrendReferenceUXTypeMapStatusLogicNodesValueXLimitsMapLogicStateNodesTypeStatusValuePointerValuesNode});
-      });
-      
-      // Shadow Path Draw limits flow canvas API nativo stroke status config properties node 
-      ctx.beginPath();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[0].x, ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[0].y);
-      for(let aIPropsScaleIndexValuesStatusUXLimitsPointRefUXStatusLogicStateValuesXStateLimitsConfigLimitUXPointerPointerLimitsLimitYLimitsMapExtRefParamLimitsDataLimitsValueUXMapMapNodeLimitLimitMapValuesConfigDataXNodesMapPointerValueRefLimitsLimitsPointerNodeLimitValueMapLimitsMapXPointerParamExtNodesNodesPointerUXFlowFlow = 1; aIPropsScaleIndexValuesStatusUXLimitsPointRefUXStatusLogicStateValuesXStateLimitsConfigLimitUXPointerPointerLimitsLimitYLimitsMapExtRefParamLimitsDataLimitsValueUXMapMapNodeLimitLimitMapValuesConfigDataXNodesMapPointerValueRefLimitsLimitsPointerNodeLimitValueMapLimitsMapXPointerParamExtNodesNodesPointerUXFlowFlow < ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam.length; aIPropsScaleIndexValuesStatusUXLimitsPointRefUXStatusLogicStateValuesXStateLimitsConfigLimitUXPointerPointerLimitsLimitYLimitsMapExtRefParamLimitsDataLimitsValueUXMapMapNodeLimitLimitMapValuesConfigDataXNodesMapPointerValueRefLimitsLimitsPointerNodeLimitValueMapLimitsMapXPointerParamExtNodesNodesPointerUXFlowFlow++){
-          ctx.lineTo(ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[aIPropsScaleIndexValuesStatusUXLimitsPointRefUXStatusLogicStateValuesXStateLimitsConfigLimitUXPointerPointerLimitsLimitYLimitsMapExtRefParamLimitsDataLimitsValueUXMapMapNodeLimitLimitMapValuesConfigDataXNodesMapPointerValueRefLimitsLimitsPointerNodeLimitValueMapLimitsMapXPointerParamExtNodesNodesPointerUXFlowFlow].x, ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[aIPropsScaleIndexValuesStatusUXLimitsPointRefUXStatusLogicStateValuesXStateLimitsConfigLimitUXPointerPointerLimitsLimitYLimitsMapExtRefParamLimitsDataLimitsValueUXMapMapNodeLimitLimitMapValuesConfigDataXNodesMapPointerValueRefLimitsLimitsPointerNodeLimitValueMapLimitsMapXPointerParamExtNodesNodesPointerUXFlowFlow].y);
-      }
-      
-      // Dibujar área fill abajo limits 
-      const fillPathNodeStyleVarTypeGraphicUIPropertiesColorLimitThemeParamsValueTypeStateThemeMappingPointerPointerThemeDataStateLimitsLogicUXTypeValueLimitsLimitLimitFlow = new Path2D(ctx.path || ''); 
-      ctx.lineTo(logicalPixelsW, logicalPixelsH);
-      ctx.lineTo(0, logicalPixelsH);
-      ctx.fillStyle = fillGradientTreeModeTypeCanvasColorStylesTypeParamsThemeFillStatusLimitsStateTypeThemeModeTreeFlowPropertiesTypeAreaNodeMappedAreaConfigRefPointYAreaAreaStateRefColorAreaParamsTypeCanvasYAreaYNodeExtValuesYScaleMappingValuesLogicPointStateColorLogicValueStateTrendRefModeTrendLimitsUXParamFlowLimitsStatusTreeMappingValuesTrendNodeLimitsYModeTrendValueLogicParams; 
-      ctx.fill();
-
-      // Recorrer trazado Main Properties UX nativo Apple config limite style theme width color point visual scale node mapping config params value type mode limit UX
-      ctx.beginPath();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = bModeMainBullTreeColorMappedThemeIndicatorNodeStateLimitsValueTypeRef;
-      ctx.moveTo(ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[0].x, ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[0].y);
-      for(let fLogicOffsetValueIndexRefTreeMappedMapYStateLimitsXPropertiesPointerTrendExtYParamUXTrendMapModeMapModeValuesValuesYTrendFlowValuesParamLimitValueLogicLimitValueTrendPointerRefTrendPointerValuesDataNodePointerParamTypeValues = 1; fLogicOffsetValueIndexRefTreeMappedMapYStateLimitsXPropertiesPointerTrendExtYParamUXTrendMapModeMapModeValuesValuesYTrendFlowValuesParamLimitValueLogicLimitValueTrendPointerRefTrendPointerValuesDataNodePointerParamTypeValues < ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam.length; fLogicOffsetValueIndexRefTreeMappedMapYStateLimitsXPropertiesPointerTrendExtYParamUXTrendMapModeMapModeValuesValuesYTrendFlowValuesParamLimitValueLogicLimitValueTrendPointerRefTrendPointerValuesDataNodePointerParamTypeValues++) {
-          ctx.lineTo(ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[fLogicOffsetValueIndexRefTreeMappedMapYStateLimitsXPropertiesPointerTrendExtYParamUXTrendMapModeMapModeValuesValuesYTrendFlowValuesParamLimitValueLogicLimitValueTrendPointerRefTrendPointerValuesDataNodePointerParamTypeValues].x, ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[fLogicOffsetValueIndexRefTreeMappedMapYStateLimitsXPropertiesPointerTrendExtYParamUXTrendMapModeMapModeValuesValuesYTrendFlowValuesParamLimitValueLogicLimitValueTrendPointerRefTrendPointerValuesDataNodePointerParamTypeValues].y);
-      }
-      ctx.stroke();
-
-      // Mouse/Finger interact status Hover limits guide indicator map! Binance exact point style reference nodes map !
-      if(focusIndexCursorStatusMapNodesValueStatusUXLimitsTrendParamStatusConfigIndexParamUXPropertiesLimitsMappingFlowLogicCrossRefLimitPointReferenceValOffsetFlowTypeLimitTrendPropertiesLogicPointTreePointerNodesValuePointerExtConfigExtExtremaValuesRefsRefRefStatusParamLimitTrendOffsetConfigUXNodeMapExtRefPointRefMapLimitsValuesPointerStateMapParamsTypeLogicXParamLimitTypeLimitStatusStateStateExtMapNodesFlow !== null) {
-          const hoveredPointerPointVarsMapValuesMappingDataLimitsLimitRefUXLogicValueLimitXNodesValuesFlowMapValuesUXStateExtStatePropertiesPointDataStateValueStateUXMapTrendNodesLogicStatusValuesValuePointStateLimitPointPropertiesRefLogicValuesStatusRefLimitLimitPointerMapLogicNodePointerFlowNode = ptsVisualUXModeScreenLogicFlowTreeXYPropertiesYOffsetMappingNodeParam[focusIndexCursorStatusMapNodesValueStatusUXLimitsTrendParamStatusConfigIndexParamUXPropertiesLimitsMappingFlowLogicCrossRefLimitPointReferenceValOffsetFlowTypeLimitTrendPropertiesLogicPointTreePointerNodesValuePointerExtConfigExtExtremaValuesRefsRefRefStatusParamLimitTrendOffsetConfigUXNodeMapExtRefPointRefMapLimitsValuesPointerStateMapParamsTypeLogicXParamLimitTypeLimitStatusStateStateExtMapNodesFlow];
-          const trackHcolorVarLimitsStateNodesRefMapUXExtValueNodeConfigLimitsPointerFlowTrendDataStatusPointerRefValueMapLimitsLogicValuePointerDataRefLimitsStateTypeXExtLimitsLimitDataXValueTrendRefExt = themeKey === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
-          // Punteros Cross-Hair de intersección de la historia! Exactitud nativa
-          ctx.lineWidth = 1; 
-          ctx.strokeStyle = trackHcolorVarLimitsStateNodesRefMapUXExtValueNodeConfigLimitsPointerFlowTrendDataStatusPointerRefValueMapLimitsLogicValuePointerDataRefLimitsStateTypeXExtLimitsLimitDataXValueTrendRefExt;
-          ctx.beginPath();
-          ctx.moveTo(hoveredPointerPointVarsMapValuesMappingDataLimitsLimitRefUXLogicValueLimitXNodesValuesFlowMapValuesUXStateExtStatePropertiesPointDataStateValueStateUXMapTrendNodesLogicStatusValuesValuePointStateLimitPointPropertiesRefLogicValuesStatusRefLimitLimitPointerMapLogicNodePointerFlowNode.x, 0); 
-          ctx.lineTo(hoveredPointerPointVarsMapValuesMappingDataLimitsLimitRefUXLogicValueLimitXNodesValuesFlowMapValuesUXStateExtStatePropertiesPointDataStateValueStateUXMapTrendNodesLogicStatusValuesValuePointStateLimitPointPropertiesRefLogicValuesStatusRefLimitLimitPointerMapLogicNodePointerFlowNode.x, logicalPixelsH); // vertical var UX node mapping track indicator guide cross map logic line X parameters flow tree properties node 
-          ctx.stroke();
-
-          // Dibuja bolita / DOT de foco precio estilo "V-GAP app nativo point type trend dot reference state config properties data" ! 
-          ctx.beginPath();
-          ctx.fillStyle = themeKey === 'dark' ? '#000000' : '#ffffff'; // agujero map UI background node limit theme tree status
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = bModeMainBullTreeColorMappedThemeIndicatorNodeStateLimitsValueTypeRef; 
-          ctx.arc(hoveredPointerPointVarsMapValuesMappingDataLimitsLimitRefUXLogicValueLimitXNodesValuesFlowMapValuesUXStateExtStatePropertiesPointDataStateValueStateUXMapTrendNodesLogicStatusValuesValuePointStateLimitPointPropertiesRefLogicValuesStatusRefLimitLimitPointerMapLogicNodePointerFlowNode.x, hoveredPointerPointVarsMapValuesMappingDataLimitsLimitRefUXLogicValueLimitXNodesValuesFlowMapValuesUXStateExtStatePropertiesPointDataStateValueStateUXMapTrendNodesLogicStatusValuesValuePointStateLimitPointPropertiesRefLogicValuesStatusRefLimitLimitPointerMapLogicNodePointerFlowNode.y, 6, 0, Math.PI * 2); 
-          ctx.fill(); 
-          ctx.stroke(); 
-      }
-   }
-
-   // Limpiamos los anteriores escuchadores tactiles por las purgas de theme Apple Limits DOM updates nodes tree flow !! (Patrón moderno web apps nativas)
-   const mapEventHandlersToFreshDomLimitPointerXNodesUXCursorValueModeMappingHoverTypeLimitDataLogicReferenceExtModeValueReferenceConfigFlowRefExtConfigRefValueStatusValuesFlowDataTypeConfigFlowPointerPointerPointerUXStateMapModePropertiesXModeStateModePointerXFlowTypeRefPropertiesNodesRefReferenceLimitLimitValuesConfigTrendValuesExtFlowLogicMapUXNodeValuesNodesLimitStateLimitPointerExtExtConfigProperties = (evtParamEventPointerExtMappingDOMCursorEventLimitsLogicPropertiesXRefValuesYTypeStatusDataMappingMapNodesFlowRefStatusValuePointerNodes) => {
-       const boundVarRectangleRefUIUXNativeHoverValueRef = cvs.getBoundingClientRect(); 
-       let cClientVarMappedRefValuesTrendUXFlowMapMouseNodesPropertiesLogicEventHoverTreeMouseLogicMappingDataLimitCursorParamLimitExtExtConfigRefReferencePointerLimitPointerStatusDataTrendValuesRefPropertiesXLogicLimitsMappingStatusStateXDataRefMappingModeMapRefValueNodes = (evtParamEventPointerExtMappingDOMCursorEventLimitsLogicPropertiesXRefValuesYTypeStatusDataMappingMapNodesFlowRefStatusValuePointerNodes.touches && evtParamEventPointerExtMappingDOMCursorEventLimitsLogicPropertiesXRefValuesYTypeStatusDataMappingMapNodesFlowRefStatusValuePointerNodes.touches.length > 0) ? evtParamEventPointerExtMappingDOMCursorEventLimitsLogicPropertiesXRefValuesYTypeStatusDataMappingMapNodesFlowRefStatusValuePointerNodes.touches[0].clientX : evtParamEventPointerExtMappingDOMCursorEventLimitsLogicPropertiesXRefValuesYTypeStatusDataMappingMapNodesFlowRefStatusValuePointerNodes.clientX; 
-       let mappingRefValueInternalCanvasParamXPositionXStatusNodeValueHoverMousePropertiesUXReferencePointerCursorExtXLimitsDataPropertiesFlowDataRefXStateNodesLimitsRefValuesLogicMapLimitMappingValueStatusValueModePropertiesLimitsPointerPointerUXMapTrendConfigLimitFlowLimitsLogicPropertiesValueMapLimitLimitsTypeLogicPointerDataStateDataStatusNodeExtStateLimitExtStateMappingDataMappingMapping = Math.max(0, Math.min(boundVarRectangleRefUIUXNativeHoverValueRef.width, cClientVarMappedRefValuesTrendUXFlowMapMouseNodesPropertiesLogicEventHoverTreeMouseLogicMappingDataLimitCursorParamLimitExtExtConfigRefReferencePointerLimitPointerStatusDataTrendValuesRefPropertiesXLogicLimitsMappingStatusStateXDataRefMappingModeMapRefValueNodes - boundVarRectangleRefUIUXNativeHoverValueRef.left)); 
-       
-       // Index snap !
-       const iTrackObjValLimitsParamLimitFlowLimitsFlowStateMappingLimitsConfigXIndexMapTrendXMappingFlowLogicExtModeValuePropertiesExtStateXFlowLogicXMapTypeReferenceLogicPointerStatusNodeUXMappingValuesDataValuesReferenceRefLogicModeTypeUXPointerNodesExtStateStateConfigLimitsNodeLogicLimitsMapNodeConfigExt = Math.round((mappingRefValueInternalCanvasParamXPositionXStatusNodeValueHoverMousePropertiesUXReferencePointerCursorExtXLimitsDataPropertiesFlowDataRefXStateNodesLimitsRefValuesLogicMapLimitMappingValueStatusValueModePropertiesLimitsPointerPointerUXMapTrendConfigLimitFlowLimitsLogicPropertiesValueMapLimitLimitsTypeLogicPointerDataStateDataStatusNodeExtStateLimitExtStateMappingDataMappingMapping / boundVarRectangleRefUIUXNativeHoverValueRef.width) * (dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.length - 1)); 
-       
-       updateLabelsIndexHUDLogicNodeMappedRefPointHoverXInteractionLimitsUIUXStatusParamsStatusTrendMappedMapReference(iTrackObjValLimitsParamLimitFlowLimitsFlowStateMappingLimitsConfigXIndexMapTrendXMappingFlowLogicExtModeValuePropertiesExtStateXFlowLogicXMapTypeReferenceLogicPointerStatusNodeUXMappingValuesDataValuesReferenceRefLogicModeTypeUXPointerNodesExtStateStateConfigLimitsNodeLogicLimitsMapNodeConfigExt); 
-   };
-
-   // Resetao del DOM event Apple (clone the cvs wrapper for pure DOM event detach reset map tree limits to save huge cache flow reference ghost memory tree map properties iOS values mode parameter limitations data param mapping logic map !)
-   const freshAppleNativeCVSDOMLayerStatusFlowDataMappingTreeValueLimitsMapRefExtRef = cvs.cloneNode(true);
-   cvs.parentNode.replaceChild(freshAppleNativeCVSDOMLayerStatusFlowDataMappingTreeValueLimitsMapRefExtRef, cvs);
-
-   // Attach events pointers to cloned fresh node properties UX tree Limit X type Ext Nodes 
-   freshAppleNativeCVSDOMLayerStatusFlowDataMappingTreeValueLimitsMapRefExtRef.addEventListener('pointermove', mapEventHandlersToFreshDomLimitPointerXNodesUXCursorValueModeMappingHoverTypeLimitDataLogicReferenceExtModeValueReferenceConfigFlowRefExtConfigRefValueStatusValuesFlowDataTypeConfigFlowPointerPointerPointerUXStateMapModePropertiesXModeStateModePointerXFlowTypeRefPropertiesNodesRefReferenceLimitLimitValuesConfigTrendValuesExtFlowLogicMapUXNodeValuesNodesLimitStateLimitPointerExtExtConfigProperties);
-   freshAppleNativeCVSDOMLayerStatusFlowDataMappingTreeValueLimitsMapRefExtRef.addEventListener('touchmove', mapEventHandlersToFreshDomLimitPointerXNodesUXCursorValueModeMappingHoverTypeLimitDataLogicReferenceExtModeValueReferenceConfigFlowRefExtConfigRefValueStatusValuesFlowDataTypeConfigFlowPointerPointerPointerUXStateMapModePropertiesXModeStateModePointerXFlowTypeRefPropertiesNodesRefReferenceLimitLimitValuesConfigTrendValuesExtFlowLogicMapUXNodeValuesNodesLimitStateLimitPointerExtExtConfigProperties, {passive: true}); 
-
-   // Reestablecer status visual de HOY nativamente tras salida hover drag limit bounds mode UI data Apple tree config iOS Ref 
-   freshAppleNativeCVSDOMLayerStatusFlowDataMappingTreeValueLimitsMapRefExtRef.addEventListener('pointerleave', () => {
-        updateLabelsIndexHUDLogicNodeMappedRefPointHoverXInteractionLimitsUIUXStatusParamsStatusTrendMappedMapReference(dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.length - 1); 
-        drawPath(null); // Quitar CrossHairs Pointer cursor line type 
-   });
-
-   // Iniciar con Index Final default limit flow data value mode state value state map ext UX state value nodes mode param logic (Hoy limits mode !)
-   updateLabelsIndexHUDLogicNodeMappedRefPointHoverXInteractionLimitsUIUXStatusParamsStatusTrendMappedMapReference(dStackMappedRootTrendReferenceConfigNodePathArrayFlowLogicItemsSetLimits.length - 1); 
-   drawPath(null); 
+// 5. Gestor de Datos (Colores y Valores)
+function getChartDataset() {
+    const isParalelo = currentGraphType === 'paralelo';
+    const colorLine = isParalelo ? '#FF9F0A' : '#0A84FF';
+    const bgColor = isParalelo ? 'rgba(255, 159, 10, 0.15)' : 'rgba(10, 132, 255, 0.15)';
+    
+    return {
+        labels: rawChartData[currentGraphType].labels,
+        datasets: [{
+            label: isParalelo ? 'Paralelo' : 'BCV',
+            data: rawChartData[currentGraphType].data,
+            borderColor: colorLine,
+            backgroundColor: bgColor,
+            borderWidth: 3,
+            fill: true
+        }]
+    };
 }
