@@ -7,6 +7,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
+    <!-- Si tienes logo json de la emanifest pisa normal  -->
     <link rel="manifest" href="manifest.json">
     <title>V-Gap Ultra</title>
     <link rel="stylesheet" href="style.css">
@@ -59,13 +60,11 @@
     <div class="input-field bcv-field" id="bcvContainer">
       <div class="label-row">
         <label class="tooltip">
-          <a href="https://www.bcv.org.ve/" target="_blank" rel="noopener noreferrer" style="display: inline-flex; text-decoration: none; color: inherit;">
-            <svg viewBox="0 0 100 100" class="mini-icon bcv-logo">
-              <circle cx="50" cy="50" r="50" fill="#0A3B7C"/>
-              <circle cx="50" cy="50" r="42" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
-              <text x="50" y="62" text-anchor="middle" fill="#FFFFFF" font-size="32" font-family="Times New Roman, serif" font-weight="bold" letter-spacing="1">BCV</text>
-            </svg>
-          </a>
+          <svg viewBox="0 0 100 100" class="mini-icon bcv-logo">
+            <circle cx="50" cy="50" r="50" fill="#0A3B7C"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+            <text x="50" y="62" text-anchor="middle" fill="#FFFFFF" font-size="32" font-family="Times New Roman, serif" font-weight="bold" letter-spacing="1">BCV</text>
+          </svg>
           BCV ⓘ <span class="tooltiptext">Tasa oficial del Banco Central.</span>
         </label>
         <div id="badgeBcv" class="mode-badge api-bcv" onclick="toggleBcv()">AUTO</div>
@@ -120,6 +119,7 @@
     </div>
   </div>
 
+  <!-- NÚCLEO GRAFICO ESTILO BINANCE  -->
   <div class="chart-wrapper">
     <div class="chart-header" onclick="toggleChart()">
       <span>📊 Variación Últimos 30D</span>
@@ -134,10 +134,12 @@
             <button class="chart-tab" id="tabBcvChart" onclick="switchChartType('oficial')">Banco Oficial (BCV)</button>
         </div>
         <div class="chart-relative-container">
+            <!-- Pizarras superpuestas dinamicas interactivas  -->
             <div id="chartHud" class="chart-hud-layer">
                <span id="hudDate">Buscando Datos...</span>
                <span id="hudValue">0.00 Bs</span>
             </div>
+            <!-- Canvas Nativo Cero-Latencia   -->
             <canvas id="ultraHistoryCanvas" height="160"></canvas>
         </div>
       </div>
