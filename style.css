@@ -105,11 +105,8 @@ input:checked + .slider-theme .icon-sun { color: #636366; }
 .chart-header:hover { color: var(--text); }
 .chevron-icon { width: 15px; height: 15px; transition: transform 0.4s ease; }
 .chevron-icon.rotate { transform: rotate(180deg); }
-
-/* OPTIMIZACIÓN FELLOW: Aceleración de GPU para el acordeón */
 .chart-content-grid {
    display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.4s ease, opacity 0.3s ease; opacity: 0; 
-   will-change: grid-template-rows, opacity;
 }
 .chart-content-grid:not(.collapsed) {
    grid-template-rows: 1fr; opacity: 1; padding-bottom: 15px; 
