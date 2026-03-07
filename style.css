@@ -98,15 +98,18 @@ input:checked + .slider-theme .icon-sun { color: #636366; }
 .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
 
 /* =======================================================
-   ACORDEÓN - GRÁFICO HISTÓRICO BINANCE 
+   ESTÉTICAS - GRÁFICO HISTÓRICO BINANCE INTERACTIVO
 =========================================================*/
 .chart-wrapper { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 0 15px; }
 .chart-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 5px; font-weight: 700; font-size: 12px; color: var(--text-dim); cursor: pointer; transition: color 0.3s; }
 .chart-header:hover { color: var(--text); }
 .chevron-icon { width: 15px; height: 15px; transition: transform 0.4s ease; }
 .chevron-icon.rotate { transform: rotate(180deg); }
+
+/* OPTIMIZACIÓN FELLOW: Aceleración de GPU para el acordeón */
 .chart-content-grid {
    display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.4s ease, opacity 0.3s ease; opacity: 0; 
+   will-change: grid-template-rows, opacity;
 }
 .chart-content-grid:not(.collapsed) {
    grid-template-rows: 1fr; opacity: 1; padding-bottom: 15px; 
@@ -118,6 +121,16 @@ input:checked + .slider-theme .icon-sun { color: #636366; }
 .chart-tab { flex: 1; background: transparent; border: none; font-size: 11px; font-weight: 700; color: var(--text-dim); padding: 6px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
 .chart-tab.active { background: var(--bg); color: var(--text); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
 
-/* CONTENEDOR SEGURO PARA CHART.JS (Altura fija evita desbordes) */
-.chart-relative-container { position: relative; width: 100%; height: 220px; border-radius: 10px; background: var(--bg); overflow: hidden; padding: 10px;}
-canvas#ultraHistoryCanvas { width: 100% !important; height: 100% !important; display: block; }
+.chart-relative-container { position: relative; width: 100%; border-radius: 10px; background: var(--bg); overflow: hidden; padding-top: 10px;}
+canvas#ultraHistoryCanvas {
+    width: 100%; 
+    height: 160px;
+    display: block; 
+    touch-action: pan-y; /* Permitimos arrastre hacia abajo nativo y pan visual tactil x horizontal via javascript logic interno !  */
+    cursor: crosshair;
+}
+
+/* FLOTANTES ENCIMA (TOOLTIP ESTILO BROKER CRIPTOMONEDAS HUD)  */
+.chart-hud-layer { position: absolute; top: 10px; left: 15px; right: 15px; display: flex; justify-content: space-between; pointer-events: none; z-index: 2; font-size: 12px; font-weight: 700; }
+.chart-hud-layer span { transition: color 0.2s;}
+#hudDate { color: var(--text-dim); }
