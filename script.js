@@ -3,8 +3,12 @@ const getEl = (id) => document.getElementById(id);
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
+// Memoria para el auto-deshacer manual
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
+
+// Para el Gráfico
+let historicalChartInstance = null;
 
 // --- PANTALLA DE BIENVENIDA Y TEMA ---
 window.startApp = (theme) => {
@@ -23,23 +27,6 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    
-    // Actualizar colores del gráfico interactivo si está abierto
-    if(typeof historicalChartInstance !== 'undefined' && historicalChartInstance) {
-        const textColor = isDark ? '#8E8E93' : '#636366';
-        const gridColor = isDark ? '#333335' : '#D1D1D6';
-        const tooltipBg = isDark ? 'rgba(28,28,30,0.95)' : 'rgba(255,255,255,0.95)';
-        const tooltipText = isDark ? '#FFFFFF' : '#000000';
-        
-        historicalChartInstance.options.scales.x.ticks.color = textColor;
-        historicalChartInstance.options.scales.y.ticks.color = textColor;
-        historicalChartInstance.options.scales.y.grid.color = gridColor;
-        historicalChartInstance.options.plugins.tooltip.backgroundColor = tooltipBg;
-        historicalChartInstance.options.plugins.tooltip.titleColor = tooltipText;
-        historicalChartInstance.options.plugins.tooltip.bodyColor = tooltipText;
-        historicalChartInstance.options.plugins.tooltip.borderColor = gridColor;
-        historicalChartInstance.update();
-    }
 };
 
 // --- LÓGICA BCV ---
@@ -66,7 +53,7 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- LÓGICA BINANCE ---
+// --- LÓGICA BINANCE / PARALELO ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
@@ -87,19 +74,23 @@ window.toggleBinance = async () => {
     }
 };
 
+// --- BUSCADOR BCV (REPARADO CON LA API DIRECTA QUE PEDISTE) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
+
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
+        // Usa la ruta explícita al BCV (el JSON es un objeto directo, no un array)
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + new Date().getTime());
         const data = await r.json();
-        const bcvData = data.find(item => item.fuente === 'oficial');
-        if (bcvData && bcvData.promedio) {
-            input.value = parseFloat(bcvData.promedio).toFixed(2);
-            // Usamos tu API para la fecha exacta de la última actualización real
-            const apiDate = new Date(bcvData.fechaActualizacion);
+        
+        if (data && data.promedio) {
+            input.value = parseFloat(data.promedio).toFixed(2);
+            
+            const apiDate = new Date(data.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
+            
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
@@ -107,29 +98,139 @@ window.fetchBcvOnly = async () => {
         }
     } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000);
+        setTimeout(() => window.toggleBcv(), 1000); 
     }
 };
 
+// --- BUSCADOR PARALELO ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
+
     try {
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
+        
         const paraleloData = data.find(item => item.fuente === 'paralelo');
+        
         if (paraleloData && paraleloData.promedio) {
             input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
         } else {
-            throw new Error("Sin datos");
+            throw new Error("Sin datos de Paralelo");
         }
     } catch (e) {
         badge.innerText = "ERROR";
         setTimeout(() => window.toggleBinance(), 1000);
     }
 };
+
+
+// ==========================================
+// EL GRÁFICO INTERACTIVO (Chart.js Profesional)
+// ==========================================
+window.openChartModal = async () => {
+    getEl('chartModal').classList.remove('hidden');
+    
+    try {
+        // Pedimos los históricos a la API 
+        const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
+        const histData = await r.json();
+        
+        // Filtramos y ordenamos del más viejo al más nuevo (7 días)
+        const histOficial = histData.filter(h => h.fuente === 'oficial').slice(0, 7).reverse();
+        const histParalelo = histData.filter(h => h.fuente === 'paralelo').slice(0, 7).reverse();
+
+        // Extraemos las fechas (Ajustamos T12:00:00 para la API que enviaste)
+        const labels = histParalelo.map(h => {
+            const dateStr = h.fecha || h.fechaActualizacion;
+            const d = new Date(dateStr + "T12:00:00");
+            return d.toLocaleDateString('es-VE', { day: '2-digit', month: 'short' });
+        });
+
+        const dataParalelo = histParalelo.map(h => h.promedio);
+        const dataOficial = histOficial.map(h => h.promedio);
+
+        // Borra el gráfico anterior si lo abres varias veces
+        if (historicalChartInstance) {
+            historicalChartInstance.destroy();
+        }
+
+        // DIBUJA EL GRÁFICO CON CHART.JS
+        const ctx = getEl('historyChart').getContext('2d');
+        historicalChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Paralelo',
+                        data: dataParalelo,
+                        borderColor: '#FF9F0A', // Naranja
+                        backgroundColor: 'rgba(255, 159, 10, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#FF9F0A',
+                        tension: 0.4, // Curvas suaves
+                        fill: true
+                    },
+                    {
+                        label: 'BCV',
+                        data: dataOficial,
+                        borderColor: '#0A84FF', // Azul
+                        backgroundColor: 'rgba(10, 132, 255, 0.1)',
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#0A84FF',
+                        tension: 0.4,
+                        fill: true
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: getEl('themeToggleCheckbox').checked ? '#FFF' : '#000' }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0,0,0,0.8)',
+                        titleFont: { size: 13 },
+                        bodyFont: { size: 14, weight: 'bold' },
+                        padding: 10,
+                        cornerRadius: 10,
+                        displayColors: true
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#8E8E93' }
+                    },
+                    y: {
+                        grid: { color: '#333335' },
+                        ticks: { color: '#8E8E93', callback: function(value) { return 'Bs ' + value; } }
+                    }
+                }
+            }
+        });
+
+    } catch (e) {
+        console.error("Error cargando el gráfico", e);
+    }
+};
+
+window.closeChartModal = () => {
+    getEl('chartModal').classList.add('hidden');
+};
+// ==========================================
+
 
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
@@ -144,9 +245,7 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // Carga los datos del gráfico en secreto por detrás para que estén listos
-    backgroundPreloadChart(); 
-
+    // Auto-Deshacer (Binance)
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -161,6 +260,7 @@ window.onload = () => {
         }
     });
 
+    // Auto-Deshacer (BCV)
     getEl('rateBcv').addEventListener('blur', (e) => {
         if(!isBcvApi) {
             const val = e.target.value;
@@ -176,7 +276,9 @@ window.onload = () => {
     });
     
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
-        getEl(id).addEventListener('input', () => sync(id.replace('input', '').toLowerCase()));
+        getEl(id).addEventListener('input', (e) => {
+            sync(id.replace('input', '').toLowerCase());
+        });
     });
 };
 
@@ -225,148 +327,3 @@ window.copyInputBs = async () => {
 };
 
 window.resetAll = () => { ['inputUsd', 'inputUsdt', 'inputBs'].forEach(id => getEl(id).value = ""); updateUI(); };
-
-
-// =========================================================================
-// MÓDULO INTELIGENTE "GRÁFICO BINANCE" (CON CHART.JS ESTABLE)
-// =========================================================================
-
-let rawChartData = { oficial: { labels: [], data: [] }, paralelo: { labels: [], data: [] } };
-let historicalChartInstance = null;
-let currentGraphType = 'paralelo'; 
-let chartIsExpanded = false;
-
-// 1. Descarga y procesa la data plana que mostraste, de forma silenciosa
-async function backgroundPreloadChart() {
-    try {
-        const resp = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
-        const data = await resp.json();
-        
-        ['oficial', 'paralelo'].forEach(fuente => {
-            // Filtramos
-            let filtered = data.filter(d => d.fuente === fuente);
-            
-            // Ordenamos del más viejo al más nuevo usando la "fecha"
-            // Se le suma T12:00:00 para evitar que la zona horaria reste un día
-            filtered.sort((a, b) => new Date(a.fecha + "T12:00:00") - new Date(b.fecha + "T12:00:00"));
-            
-            // Guardamos solo los últimos 30 días para no saturar
-            filtered = filtered.slice(-30);
-            
-            rawChartData[fuente].labels = filtered.map(item => {
-                let d = new Date(item.fecha + "T12:00:00");
-                return d.toLocaleDateString('es-VE', {day: '2-digit', month: 'short'}); // Ejemplo: 14 feb
-            });
-            rawChartData[fuente].data = filtered.map(item => parseFloat(item.promedio));
-        });
-    } catch(e) {
-        console.error("Error cargando históricos", e);
-    }
-}
-
-// 2. Control del Acordeón
-window.toggleChart = () => {
-    chartIsExpanded = !chartIsExpanded;
-    getEl('chartContent').classList.toggle('collapsed');
-    getEl('chartChevron').classList.toggle('rotate');
-    
-    if(chartIsExpanded) {
-        // Damos 300ms a que el CSS abra la caja, y luego pintamos el gráfico
-        setTimeout(() => {
-            if(!historicalChartInstance && rawChartData.paralelo.data.length > 0) {
-                renderChart();
-            }
-        }, 300);
-    }
-}
-
-// 3. Cambio de Pestañas (P2P vs BCV)
-window.switchChartType = (type) => {
-    currentGraphType = type;
-    getEl('tabBinChart').classList.toggle('active', type === 'paralelo');
-    getEl('tabBcvChart').classList.toggle('active', type === 'oficial');
-    
-    if(historicalChartInstance) {
-        historicalChartInstance.data = getChartDataset();
-        historicalChartInstance.update();
-    } 
-}
-
-// 4. El motor de dibujo (Chart.js interactivo)
-function renderChart() {
-    const ctx = getEl('ultraHistoryCanvas').getContext('2d');
-    
-    // Leemos el tema actual
-    const isDark = document.body.getAttribute('data-theme') === 'dark';
-    const textColor = isDark ? '#8E8E93' : '#636366';
-    const gridColor = isDark ? '#333335' : '#D1D1D6';
-    const tooltipBg = isDark ? 'rgba(28,28,30,0.95)' : 'rgba(255,255,255,0.95)';
-    const tooltipText = isDark ? '#FFFFFF' : '#000000';
-    
-    historicalChartInstance = new Chart(ctx, {
-        type: 'line',
-        data: getChartDataset(),
-        options: {
-            responsive: true,
-            maintainAspectRatio: false, // Fundamental para que respete el contenedor fijo y no desborde
-            plugins: {
-                legend: { display: false },
-                // Aquí nace la magia interactiva: la burbuja al pasar el dedo
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    backgroundColor: tooltipBg,
-                    titleColor: tooltipText,
-                    bodyColor: tooltipText,
-                    borderColor: gridColor,
-                    borderWidth: 1,
-                    padding: 10,
-                    displayColors: false,
-                    callbacks: {
-                        label: function(context) {
-                            return 'Precio: ' + new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(context.parsed.y) + ' Bs';
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    grid: { display: false },
-                    ticks: { color: textColor, maxTicksLimit: 7 } // Máximo 7 fechas abajo para no amontonar
-                },
-                y: {
-                    grid: { color: gridColor, borderDash: [5, 5] },
-                    ticks: { color: textColor }
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
-            },
-            elements: {
-                line: { tension: 0.4 }, // Curvas suaves y orgánicas
-                point: { radius: 0, hitRadius: 15, hoverRadius: 6 } // Los puntos son invisibles hasta que los tocas
-            }
-        }
-    });
-}
-
-// 5. Gestor de Datos (Colores y Valores)
-function getChartDataset() {
-    const isParalelo = currentGraphType === 'paralelo';
-    const colorLine = isParalelo ? '#FF9F0A' : '#0A84FF';
-    const bgColor = isParalelo ? 'rgba(255, 159, 10, 0.15)' : 'rgba(10, 132, 255, 0.15)';
-    
-    return {
-        labels: rawChartData[currentGraphType].labels,
-        datasets: [{
-            label: isParalelo ? 'Paralelo' : 'BCV',
-            data: rawChartData[currentGraphType].data,
-            borderColor: colorLine,
-            backgroundColor: bgColor,
-            borderWidth: 3,
-            fill: true
-        }]
-    };
-}
