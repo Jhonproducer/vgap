@@ -3,7 +3,6 @@
   --bg: #F2F2F7; --card: #FFFFFF; --border: #D1D1D6;
   --text: #000000; --text-dim: #636366;
   --blue: #0A84FF; --orange: #FF9F0A; --green: #32D74B;
-  --red: #FF453A;
 }
 
 /* OSCURO AL ACTIVARSE */
@@ -16,8 +15,11 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 input[type=number] { -moz-appearance: textfield; }
 
 body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; display: flex; justify-content: center; padding: 15px; transition: 0.3s; margin: 0; overflow-x: hidden; }
-.app-container { width: 100%; max-width: 360px; border: 1px solid var(--border); padding: 22px; border-radius: 35px; background: var(--bg); opacity: 0; transition: 0.5s opacity; margin-bottom: 25px;}
+.app-container { width: 100%; max-width: 360px; border: 1px solid var(--border); padding: 22px; border-radius: 35px; background: var(--bg); opacity: 0; transition: 0.5s opacity; }
 
+/* ---------------------------------------------------
+   PANTALLA DE BIENVENIDA (Fija y Segura)
+----------------------------------------------------- */
 .welcome-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000000; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: 0.5s opacity, 0.5s visibility; }
 .welcome-screen.hidden { opacity: 0; visibility: hidden; }
 .welcome-content { text-align: center; padding: 30px; background: #1C1C1E; border-radius: 30px; border: 1px solid #333335; box-shadow: 0 20px 50px rgba(0,0,0,0.8); width: 85%; max-width: 320px; }
@@ -29,16 +31,42 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .btn-dark { background: #333335; color: #FFFFFF; border: 1px solid #555; }
 .emoji { font-size: 18px; }
 
+/* V-GAP LOGO ANIMADO Y PREMIUM */
 .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .logo-area { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 24px; letter-spacing: -0.5px; }
 .logo-icon { 
-  background: linear-gradient(135deg, #00C6FF, #0072FF); color: white; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4); position: relative; overflow: hidden;
+  background: linear-gradient(135deg, #00C6FF, #0072FF); 
+  color: white; 
+  width: 34px; 
+  height: 34px; 
+  border-radius: 10px; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  font-size: 22px;
+  box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
+  position: relative;
+  overflow: hidden;
 }
 .logo-icon::after {
-  content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%); transform: rotate(45deg); animation: shine 3s infinite;
+  content: '';
+  position: absolute;
+  top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.4) 50%, rgba(255,255,255,0) 100%);
+  transform: rotate(45deg);
+  animation: shine 3s infinite;
 }
-@keyframes shine { 0% { transform: translateX(-100%) rotate(45deg); } 50% { transform: translateX(100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
-.logo-text { background: linear-gradient(to right, var(--text), var(--blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+@keyframes shine {
+  0% { transform: translateX(-100%) rotate(45deg); }
+  50% { transform: translateX(100%) rotate(45deg); }
+  100% { transform: translateX(100%) rotate(45deg); }
+}
+.logo-text {
+  background: linear-gradient(to right, var(--text), var(--blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
 .nav-right { display: flex; align-items: center; gap: 10px; }
 .live-tag { background: var(--green); color: black; font-size: 9px; font-weight: 900; padding: 2px 6px; border-radius: 4px; animation: blink 1.5s infinite; }
@@ -61,18 +89,16 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, sa
 .highlight-border { border-color: var(--orange); }
 
 .btn-copy-elegant { background: transparent; color: var(--blue); border: 1.5px solid var(--blue); width: 100%; padding: 16px; border-radius: 20px; font-weight: 700; cursor: pointer; margin-top: 15px; }
-.result-card { background: var(--card); border-radius: 28px; padding: 25px; text-align: center; border: 1px solid var(--border); margin-top: 10px; margin-bottom: 20px;}
-.result-card h2 { color: var(--blue); font-size: 32px; margin: 5px 0 10px 0; letter-spacing: -1px; }
+.result-card { background: var(--card); border-radius: 28px; padding: 25px; text-align: center; border: 1px solid var(--border); margin-top: 10px; }
+.result-card h2 { color: var(--blue); font-size: 32px; margin: 10px 0; letter-spacing: -1px; }
 
 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
 .gap-badge { background: var(--orange); color: black; padding: 4px 10px; border-radius: 10px; font-weight: 800; font-size: 14px; box-shadow: 0 0 8px var(--orange); }
 .factor-text { color: var(--orange); font-size: 10px; font-weight: bold; margin-top: 2px; text-align: right; }
 .timestamp { font-size: 10px; color: var(--text-dim); font-weight: bold; }
-.vender-info { margin-top:12px; font-size: 12px; }
-.vender-info strong { color:var(--text); }
 
 .icon-btn-copy { background: none; border: none; cursor: pointer; color: var(--blue); display: flex; align-items: center; justify-content: center; padding: 0; }
-.btn-clear { width: 100%; background: none; border: none; color: var(--red); padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
+.btn-clear { width: 100%; background: none; border: none; color: #FF453A; padding: 10px; font-weight: 700; font-size: 11px; cursor: pointer; }
 
 /* ---------------------------------------------------
    EL INTERRUPTOR BRUTAL (SOL / LUNA)
@@ -98,38 +124,3 @@ input:checked + .slider-theme .icon-sun { color: #636366; }
 .tooltip { position: relative; cursor: help; }
 .tooltiptext { visibility: hidden; width: 130px; background: #3A3A3C; color: white; text-align: center; border-radius: 6px; padding: 8px; position: absolute; z-index: 100; bottom: 130%; left: 50%; transform: translateX(-50%); font-size: 10px; font-weight: normal; opacity: 0; transition: 0.2s; border: 1px solid #555; pointer-events: none; }
 .tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
-
-/* =======================================================
-   ESTÉTICAS - GRÁFICO HISTÓRICO BINANCE INTERACTIVO
-=========================================================*/
-.chart-wrapper { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 0 15px; }
-.chart-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 5px; font-weight: 700; font-size: 12px; color: var(--text-dim); cursor: pointer; transition: color 0.3s; }
-.chart-header:hover { color: var(--text); }
-.chevron-icon { width: 15px; height: 15px; transition: transform 0.4s ease; }
-.chevron-icon.rotate { transform: rotate(180deg); }
-.chart-content-grid {
-   display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.4s ease, opacity 0.3s ease; opacity: 0; 
-}
-.chart-content-grid:not(.collapsed) {
-   grid-template-rows: 1fr; opacity: 1; padding-bottom: 15px; 
-}
-.chart-inner-area { overflow: hidden; }
-
-/* Submenus de Interfases visual Binance tabs*/
-.chart-tabs { display: flex; gap: 8px; padding: 4px; border-radius: 10px; background: rgba(128,128,128,0.1); margin-bottom: 12px;}
-.chart-tab { flex: 1; background: transparent; border: none; font-size: 11px; font-weight: 700; color: var(--text-dim); padding: 6px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
-.chart-tab.active { background: var(--bg); color: var(--text); box-shadow: 0 2px 5px rgba(0,0,0,0.15); }
-
-.chart-relative-container { position: relative; width: 100%; border-radius: 10px; background: var(--bg); overflow: hidden; padding-top: 10px;}
-canvas#ultraHistoryCanvas {
-    width: 100%; 
-    height: 160px;
-    display: block; 
-    touch-action: pan-y; /* Permitimos arrastre hacia abajo nativo y pan visual tactil x horizontal via javascript logic interno !  */
-    cursor: crosshair;
-}
-
-/* FLOTANTES ENCIMA (TOOLTIP ESTILO BROKER CRIPTOMONEDAS HUD)  */
-.chart-hud-layer { position: absolute; top: 10px; left: 15px; right: 15px; display: flex; justify-content: space-between; pointer-events: none; z-index: 2; font-size: 12px; font-weight: 700; }
-.chart-hud-layer span { transition: color 0.2s;}
-#hudDate { color: var(--text-dim); }
