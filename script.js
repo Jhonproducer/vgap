@@ -1,12 +1,21 @@
+/**
+ * @file V-GAP ULTRA - Core Logic
+ * @description Motor principal de calculadora financiera y renderizado de gráficos nativos (Canvas API).
+ * @architecture MVC-Lite en un solo archivo con protección de memoria (Fallback system).
+ */
+
 const getEl = (id) => document.getElementById(id);
 
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
+// --- STATE MANAGEMENT: MEMORY STACK ---
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
-// --- PANTALLA DE BIENVENIDA Y TEMA ---
+// ==========================================
+// MÓDULO 1: INTERFAZ Y TEMAS (UI MODULE)
+// ==========================================
 window.startApp = (theme) => {
     document.body.setAttribute('data-theme', theme);
     getEl('themeToggleCheckbox').checked = theme === 'dark';
@@ -23,12 +32,12 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    
-    if(chartExpanded.bin) renderChartGraph('bin'); 
-    if(chartExpanded.bcv) renderChartGraph('bcv'); 
+    renderActiveChartGraph(); 
 };
 
-// --- LÓGICA BCV ---
+// ==========================================
+// MÓDULO 2: CONTROLADORES API (FETCH MODULE)
+// ==========================================
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -86,6 +95,8 @@ window.fetchBcvOnly = async () => {
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
             badge.innerText = "AUTO";
             sync('ratebcv');
+        } else {
+            throw new Error("Sin datos de BCV");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -104,6 +115,8 @@ window.fetchBinanceOnly = async () => {
             input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
+        } else {
+            throw new Error("Sin datos");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -111,7 +124,9 @@ window.fetchBinanceOnly = async () => {
     }
 };
 
-// ======= INITIALIZATION ===========
+// ==========================================
+// MÓDULO 3: INITIALIZATION & CALCULADORA 
+// ==========================================
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
@@ -125,9 +140,10 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // Inicia el procesamiento silencioso de gráficos
+    // Enganche para el Modulo gráfico Historial invisible
     backgroundPreloadChart(); 
 
+    // Listeners de memoria para Undo
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -138,11 +154,6 @@ window.onload = () => {
                 binanceMemoryStack.push(val);
                 if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
                 localStorage.setItem('vgap_binance', val);
-                // Si el grafico está abierto, actualiza el punto final
-                if (vGapChartHistory.bin.length > 0) {
-                    vGapChartHistory.bin[vGapChartHistory.bin.length-1].val = parseFloat(val);
-                    if(chartExpanded.bin) renderChartGraph('bin');
-                }
             }
         }
     });
@@ -157,14 +168,11 @@ window.onload = () => {
                 bcvMemoryStack.push(val);
                 if(bcvMemoryStack.length > 10) bcvMemoryStack.shift();
                 localStorage.setItem('vgap_bcv', val);
-                if (vGapChartHistory.bcv.length > 0) {
-                    vGapChartHistory.bcv[vGapChartHistory.bcv.length-1].val = parseFloat(val);
-                    if(chartExpanded.bcv) renderChartGraph('bcv');
-                }
             }
         }
     });
     
+    // Sincronización instantánea (0 latency)
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         getEl(id).addEventListener('input', () => sync(id.replace('input', '').toLowerCase()));
     });
@@ -218,21 +226,27 @@ window.resetAll = () => { ['inputUsd', 'inputUsdt', 'inputBs'].forEach(id => get
 
 
 // =========================================================================
-// MÓDULO EXPERTO DE GRÁFICOS: AISLADOS Y NORMALIZADOS
+// MÓDULO 4: GRÁFICO NATIVO INTERACTIVO AISLADO (CANVAS ENGINE) 
 // =========================================================================
+let vGapChartHistory = { oficial: [], paralelo: [] }; 
+let currentGraphType = 'paralelo'; 
+let chartIsExpanded = false;
 
-let vGapChartHistory = { bcv: [], bin: [] }; 
-let chartExpanded = { bcv: false, bin: false };
-
-window.toggleChart = (type) => {
-    chartExpanded[type] = !chartExpanded[type];
-    getEl(`content-${type}`).classList.toggle('collapsed');
-    getEl(`chevron-${type}`).classList.toggle('rotate');
+window.toggleChart = () => {
+    chartIsExpanded = !chartIsExpanded;
+    getEl('chartContent').classList.toggle('collapsed');
+    getEl('chartChevron').classList.toggle('rotate');
     
-    // Fuerza Resize Render nativo solo de la caja que se abrió
-    if(chartExpanded[type]) {
-        setTimeout(() => { renderChartGraph(type); }, 150);
+    if(chartIsExpanded) {
+        setTimeout(() => { renderActiveChartGraph(); }, 150);
     }
+}
+
+window.switchChartType = (type) => {
+    currentGraphType = type;
+    getEl('tabBinChart').classList.toggle('active', type === 'paralelo');
+    getEl('tabBcvChart').classList.toggle('active', type === 'oficial');
+    renderActiveChartGraph(); 
 }
 
 const formatChartDateLabel = (date) => {
@@ -240,85 +254,69 @@ const formatChartDateLabel = (date) => {
     return `${String(date.getDate()).padStart(2,'0')} ${month}`;
 }
 
-// 1. Petición única, y luego EL EXPERTO: Normalización de Fechas para tapar huecos
+// LÓGICA DE EXTRACCIÓN HISTÓRICA AISLADA Y REPARADA
 async function backgroundPreloadChart() {
    try {
        const resp = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
-       const rawArray = await resp.json();
+       const dapiNodesArray = await resp.json();
+       let foundValidosOfi = [];
+       let foundValidosPara = [];
        
-       let rawOfi = [], rawPara = [];
-       if (Array.isArray(rawArray)) {
-           rawOfi = rawArray.filter(k => k.fuente === 'oficial');
-           rawPara = rawArray.filter(k => k.fuente === 'paralelo');
+       if (Array.isArray(dapiNodesArray)) {
+           // Filtramos y separamos rigurosamente
+           dapiNodesArray.forEach(item => {
+               const fuente = String(item.fuente || item.casa || item.nombre || "").toLowerCase();
+               
+               // Corrección de zona horaria para que no atrase un día
+               const dt = new Date((item.fecha || item.fechaActualizacion) + "T12:00:00");
+               const val = parseFloat(item.promedio || item.valor || item.venta || 0);
+
+               if (!isNaN(dt.getTime()) && val > 0) {
+                   if (fuente === 'oficial') {
+                       foundValidosOfi.push({ d: dt, val: val });
+                   } else if (fuente === 'paralelo') {
+                       foundValidosPara.push({ d: dt, val: val });
+                   }
+               }
+           });
        }
-       
-       // El truco maestro: Normalizamos ambas a 30 días exactos, arrastrando el precio si el API se atrasa.
-       vGapChartHistory.bcv = normalizeHistoryArray(rawOfi, parseFloat(getEl('rateBcv').value) || 42.0);
-       vGapChartHistory.bin = normalizeHistoryArray(rawPara, parseFloat(getEl('rateBinance').value) || 600.0);
+
+       // Separación absoluta: ordenamos por fecha y nos quedamos con los últimos 30 días de cada uno independientemente.
+       vGapChartHistory.oficial = (foundValidosOfi.length < 5) ? genMock('bcv') : foundValidosOfi.sort((a,b) => a.d.getTime() - b.d.getTime()).slice(-30);
+       vGapChartHistory.paralelo = (foundValidosPara.length < 5) ? genMock('bin') : foundValidosPara.sort((a,b) => a.d.getTime() - b.d.getTime()).slice(-30);
        
    } catch(e) {
-       vGapChartHistory.bcv = genMock(parseFloat(getEl('rateBcv').value) || 42.0);
-       vGapChartHistory.bin = genMock(parseFloat(getEl('rateBinance').value) || 600.0);
+       vGapChartHistory.oficial = genMock('bcv');
+       vGapChartHistory.paralelo = genMock('bin');
    }
 }
 
-// ALGORITMO DE NORMALIZACIÓN (Cura el problema de "Binance atrasado")
-function normalizeHistoryArray(rawArray, currentCalculatedRate) {
-    if (!rawArray || rawArray.length === 0) return genMock(currentCalculatedRate);
-    
-    // Ordenamos de viejo a nuevo
-    rawArray.sort((a,b) => new Date(a.fecha+"T12:00:00") - new Date(b.fecha+"T12:00:00"));
-    
-    let processed = [];
-    let today = new Date();
-    today.setHours(23,59,59,999);
-    
-    for (let i = 29; i >= 0; i--) {
-        let targetDate = new Date();
-        targetDate.setDate(targetDate.getDate() - i);
-        targetDate.setHours(12,0,0,0);
-        
-        // Busca el último dato disponible hasta ese día (arrastra el precio en días feriados)
-        let validPoint = rawArray[0]; 
-        for(let j = 0; j < rawArray.length; j++) {
-            let pDate = new Date(rawArray[j].fecha + "T12:00:00");
-            if (pDate <= targetDate) validPoint = rawArray[j];
-            else break;
-        }
-        processed.push({ d: targetDate, val: parseFloat(validPoint.promedio) });
-    }
-    
-    // El punto final de la derecha ES el valor en vivo de tu calculadora
-    processed[processed.length - 1].val = currentCalculatedRate;
-    processed[processed.length - 1].d = new Date();
-    return processed;
-}
-
-// Emulador de caída si te quedas sin internet
-function genMock(baseValue) {
-   let simulatedArray = []; 
+// Simulador de fluctuaciones de respaldo
+function genMock(originSource) {
+   let baseValue = originSource === 'bcv' ? parseFloat(bcvMemoryStack[bcvMemoryStack.length-1])|| 41.0 : parseFloat(binanceMemoryStack[binanceMemoryStack.length-1])||49.5;
+   let simulatedBaseArrayObj = []; 
    let hoyBaseRef = new Date();
    let walkerVar = baseValue * 0.94; 
-   for (let nOffsetT = 29; nOffsetT >= 0; nOffsetT--) {
-      let dxTmpIndex = new Date(hoyBaseRef);
-      dxTmpIndex.setDate(dxTmpIndex.getDate() - nOffsetT);
+   
+   for (let nOffsetT = 30; nOffsetT >= 0; nOffsetT--) {
+      let dxTmpIndexPointMap = new Date(hoyBaseRef);
+      dxTmpIndexPointMap.setDate(dxTmpIndexPointMap.getDate() - nOffsetT);
       walkerVar = walkerVar + (walkerVar * (Math.random() * 0.012 - 0.003)); 
-      simulatedArray.push({ d: dxTmpIndex, val: walkerVar });
+      simulatedBaseArrayObj.push({ d: dxTmpIndexPointMap, val: walkerVar });
    }
-   simulatedArray[simulatedArray.length -1].val = baseValue; 
-   return simulatedArray;
+   
+   simulatedBaseArrayObj[simulatedBaseArrayObj.length -1].val = baseValue; 
+   return simulatedBaseArrayObj;
 }
 
-// 2. Dibuja cada gráfico en su propio canvas aislado
-function renderChartGraph(type) {
-   const cvs = getEl(`canvas-${type}`);
-   if (!cvs || !chartExpanded[type]) return;
+// --- MOTOR GRÁFICO (CANVAS RENDERER) ---
+function renderActiveChartGraph() {
+   const cvs = getEl('ultraHistoryCanvas');
+   if (!cvs || !chartIsExpanded) return;
    
    const themeKey = document.body.getAttribute('data-theme') || 'light';
-   // Colores designados (Naranja para binance, Azul para BCV)
-   const mainColor = type === 'bin' ? '#FF9F0A' : '#0A84FF';
+   const uiRed = '#FF453A'; 
    const uiGreen = '#32D74B';
-   const uiRed = '#FF453A';
    
    const rectBound = cvs.parentElement.getBoundingClientRect();
    if(rectBound.width === 0) return;
@@ -329,10 +327,11 @@ function renderChartGraph(type) {
    const ctx = cvs.getContext('2d');
    ctx.scale(dprScaleFactor, dprScaleFactor);
    
-   let logicalW = rectBound.width;
-   let logicalH = rectBound.height;
+   let logicalPixelsW = rectBound.width;
+   let logicalPixelsH = rectBound.height;
    
-   const historyData = vGapChartHistory[type] || [];
+   // Dibuja estrictamente los datos de la pestaña activa (aislados)
+   const historyData = vGapChartHistory[currentGraphType] || [];
    if(historyData.length === 0) return;
    
    const mapRates = historyData.map(v => v.val);
@@ -346,14 +345,13 @@ function renderChartGraph(type) {
    const startVal = mapRates[0];
    const endVal = mapRates[mapRates.length-1];
    
-   // Determinar si la tendencia fue alza o baja
-   const trendColor = endVal >= startVal ? uiGreen : uiRed;
-   const gradientColor = type === 'bin' ? 'rgba(255, 159, 10, 0.25)' : 'rgba(10, 132, 255, 0.25)';
+   const mainColor = endVal >= startVal ? uiGreen : uiRed;
+   const gradientColor = mainColor === uiGreen ? 'rgba(50,215,75,0.25)' : 'rgba(255,69,58,0.25)';
    
    const updateLabels = (pointIdx) => {
         let activePoint = historyData[pointIdx];
-        getEl(`hudDate-${type}`).innerText = formatChartDateLabel(activePoint.d);
-        const hudValueEl = getEl(`hudValue-${type}`);
+        getEl('hudDate').innerText = formatChartDateLabel(activePoint.d);
+        const hudValueEl = getEl('hudValue');
         hudValueEl.innerText = new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(activePoint.val) + ' Bs';
         hudValueEl.style.color = activePoint.val >= historyData[Math.max(0, pointIdx - 1)].val ? uiGreen : uiRed;
         
@@ -361,28 +359,30 @@ function renderChartGraph(type) {
    }
 
    function drawPath(focusIndex = null) {
-      ctx.clearRect(0,0, logicalW, logicalH);
+      ctx.clearRect(0,0, logicalPixelsW, logicalPixelsH);
       
-      let fillGradient= ctx.createLinearGradient(0, 0, 0, logicalH);
+      let fillGradient= ctx.createLinearGradient(0, 0, 0, logicalPixelsH);
       fillGradient.addColorStop(0, gradientColor);
       fillGradient.addColorStop(1, "rgba(0,0,0,0)");
       
       const pts = [];
       historyData.forEach((pt, idx, arr) => {
-          let cx = (idx / (arr.length - 1)) * logicalW; 
-          let cy = logicalH - ((pt.val - pBotPadding) / (pTopPadding - pBotPadding) * logicalH);
-          pts.push({x: cx, y: cy, index: idx});
+          let cx = (idx / (arr.length - 1)) * logicalPixelsW; 
+          let cy = logicalPixelsH - ((pt.val - pBotPadding) / (pTopPadding - pBotPadding) * logicalPixelsH);
+          pts.push({x: cx, y: cy, originalIndex: idx});
       });
       
       ctx.beginPath();
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      for(let i = 1; i < pts.length; i++){
+          ctx.lineTo(pts[i].x, pts[i].y);
+      }
       
       const fillPath = new Path2D(ctx.path || ''); 
-      ctx.lineTo(logicalW, logicalH);
-      ctx.lineTo(0, logicalH);
+      ctx.lineTo(logicalPixelsW, logicalPixelsH);
+      ctx.lineTo(0, logicalPixelsH);
       ctx.fillStyle = fillGradient; 
       ctx.fill();
 
@@ -390,7 +390,9 @@ function renderChartGraph(type) {
       ctx.lineWidth = 3;
       ctx.strokeStyle = mainColor;
       ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      for(let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+      }
       ctx.stroke();
 
       if(focusIndex !== null) {
@@ -400,7 +402,7 @@ function renderChartGraph(type) {
           ctx.strokeStyle = trackColor;
           ctx.beginPath();
           ctx.moveTo(hoveredPt.x, 0); 
-          ctx.lineTo(hoveredPt.x, logicalH); 
+          ctx.lineTo(hoveredPt.x, logicalPixelsH); 
           ctx.stroke();
 
           ctx.beginPath();
@@ -417,6 +419,7 @@ function renderChartGraph(type) {
        const bounds = cvs.getBoundingClientRect(); 
        let clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX; 
        let xPos = Math.max(0, Math.min(bounds.width, clientX - bounds.left)); 
+       
        const snappedIndex = Math.round((xPos / bounds.width) * (historyData.length - 1)); 
        updateLabels(snappedIndex); 
    };
