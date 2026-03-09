@@ -1,21 +1,17 @@
-/**
- * @file V-GAP ULTRA - Core Logic
- * @description Motor principal de calculadora financiera y renderizado de gráficos nativos (Canvas API).
- * @architecture MVC-Lite en un solo archivo con protección de memoria (Fallback system).
- */
-
 const getEl = (id) => document.getElementById(id);
 
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
-// --- STATE MANAGEMENT: MEMORY STACK ---
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
-// ==========================================
-// MÓDULO 1: INTERFAZ Y TEMAS (UI MODULE)
-// ==========================================
+// Para el Gráfico Modal Chart.js
+let historicalChartInstance = null;
+let currentChartType = 'paralelo'; 
+let rawHistoryData = { oficial: [], paralelo: [] };
+
+// --- PANTALLA DE BIENVENIDA Y TEMA ---
 window.startApp = (theme) => {
     document.body.setAttribute('data-theme', theme);
     getEl('themeToggleCheckbox').checked = theme === 'dark';
@@ -32,12 +28,13 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    renderActiveChartGraph(); 
+    
+    if(historicalChartInstance) {
+        renderChartJs(); 
+    }
 };
 
-// ==========================================
-// MÓDULO 2: CONTROLADORES API (FETCH MODULE)
-// ==========================================
+// --- LÓGICA BCV ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
@@ -61,6 +58,7 @@ window.toggleBcv = async () => {
     }
 };
 
+// --- LÓGICA BINANCE ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
@@ -81,18 +79,23 @@ window.toggleBinance = async () => {
     }
 };
 
+// --- BUSCADOR BCV (REPARADO USANDO EL ENLACE DIRECTO QUE PEDISTE) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
+
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
+        // Usa la ruta exacta que proporcionaste (devuelve objeto JSON directo)
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + new Date().getTime());
         const data = await r.json();
-        const bcvData = data.find(item => item.fuente === 'oficial');
-        if (bcvData && bcvData.promedio) {
-            input.value = parseFloat(bcvData.promedio).toFixed(2);
-            const apiDate = new Date(bcvData.fechaActualizacion);
+        
+        if (data && data.promedio) {
+            input.value = parseFloat(data.promedio).toFixed(2);
+            
+            const apiDate = new Date(data.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
+            
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
@@ -100,23 +103,27 @@ window.fetchBcvOnly = async () => {
         }
     } catch (e) {
         badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000);
+        setTimeout(() => window.toggleBcv(), 1000); 
     }
 };
 
+// --- BUSCADOR PARALELO (BINANCE) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
+
     try {
         const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
         const data = await r.json();
+        
         const paraleloData = data.find(item => item.fuente === 'paralelo');
+        
         if (paraleloData && paraleloData.promedio) {
             input.value = parseFloat(paraleloData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
         } else {
-            throw new Error("Sin datos");
+            throw new Error("Sin datos de Paralelo");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -124,9 +131,124 @@ window.fetchBinanceOnly = async () => {
     }
 };
 
-// ==========================================
-// MÓDULO 3: INITIALIZATION & CALCULADORA 
-// ==========================================
+// --- EL GRÁFICO HISTÓRICO SEPARADO POR PESTAÑAS (CHART.JS) ---
+window.openChartModal = async () => {
+    getEl('chartModal').classList.remove('hidden');
+    
+    if(rawHistoryData.oficial.length === 0) {
+        try {
+            // Usa el enlace de históricos que proporcionaste
+            const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
+            const data = await r.json();
+            
+            // SEPARAMOS LA DATA PARA QUE LAS FECHAS NO CHOQUEN (Pestañas independientes)
+            let dataOfi = data.filter(d => d.fuente === 'oficial')
+                              .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
+                              .slice(-15); // Últimos 15 días
+            
+            let dataPar = data.filter(d => d.fuente === 'paralelo')
+                              .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
+                              .slice(-15); 
+            
+            rawHistoryData.oficial = dataOfi;
+            rawHistoryData.paralelo = dataPar;
+        } catch(e) { 
+            console.error("Error API Gráfico", e); 
+        }
+    }
+    
+    renderChartJs();
+}
+
+window.closeChartModal = () => {
+    getEl('chartModal').classList.add('hidden');
+}
+
+window.switchChartType = (type) => {
+    currentChartType = type;
+    getEl('tabChartParalelo').classList.toggle('active', type === 'paralelo');
+    getEl('tabChartBcv').classList.toggle('active', type === 'oficial');
+    renderChartJs(); 
+}
+
+function renderChartJs() {
+    const ctx = getEl('historyChart').getContext('2d');
+    const isDark = document.body.getAttribute('data-theme') === 'dark';
+    
+    const currentDataList = rawHistoryData[currentChartType];
+    if(!currentDataList || currentDataList.length === 0) return;
+
+    const labels = currentDataList.map(d => {
+        let date = new Date(d.fecha + "T12:00:00");
+        return date.toLocaleDateString('es-VE', {day: '2-digit', month: 'short'});
+    });
+    const prices = currentDataList.map(d => parseFloat(d.promedio));
+    
+    const isParalelo = currentChartType === 'paralelo';
+    const color = isParalelo ? '#FF9F0A' : '#0A84FF';
+    const bgColor = isParalelo ? 'rgba(255, 159, 10, 0.15)' : 'rgba(10, 132, 255, 0.15)';
+
+    if(historicalChartInstance) {
+        historicalChartInstance.destroy();
+    }
+
+    historicalChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: isParalelo ? 'Paralelo' : 'BCV',
+                data: prices,
+                borderColor: color,
+                backgroundColor: bgColor,
+                borderWidth: 3,
+                fill: true,
+                pointRadius: 4,
+                pointBackgroundColor: color,
+                tension: 0.3 
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, 
+            plugins: {
+                legend: {display: false},
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    backgroundColor: isDark ? 'rgba(28,28,30,0.9)' : 'rgba(255,255,255,0.9)',
+                    titleColor: isDark ? '#FFF' : '#000',
+                    bodyColor: isDark ? '#FFF' : '#000',
+                    borderColor: isDark ? '#333335' : '#D1D1D6',
+                    borderWidth: 1,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) { 
+                            return 'Bs ' + context.parsed.y.toFixed(2); 
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { 
+                    grid: {display: false}, 
+                    ticks: {color: isDark ? '#8E8E93' : '#636366', maxTicksLimit: 7} 
+                },
+                y: { 
+                    grid: {color: isDark ? '#333335' : '#D1D1D6', borderDash: [5, 5]}, 
+                    ticks: {color: isDark ? '#8E8E93' : '#636366'} 
+                }
+            },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            }
+        }
+    });
+}
+
+// --- ARRANQUE Y EVENTOS PRINCIPALES ---
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
@@ -140,10 +262,6 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
     
-    // Enganche para el Modulo gráfico Historial invisible
-    backgroundPreloadChart(); 
-
-    // Listeners de memoria para Undo
     getEl('rateBinance').addEventListener('blur', (e) => {
         if(!isBinanceApi) {
             const val = e.target.value;
@@ -172,9 +290,10 @@ window.onload = () => {
         }
     });
     
-    // Sincronización instantánea (0 latency)
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
-        getEl(id).addEventListener('input', () => sync(id.replace('input', '').toLowerCase()));
+        getEl(id).addEventListener('input', (e) => {
+            sync(id.replace('input', '').toLowerCase());
+        });
     });
 };
 
@@ -223,218 +342,3 @@ window.copyInputBs = async () => {
 };
 
 window.resetAll = () => { ['inputUsd', 'inputUsdt', 'inputBs'].forEach(id => getEl(id).value = ""); updateUI(); };
-
-
-// =========================================================================
-// MÓDULO 4: GRÁFICO NATIVO INTERACTIVO AISLADO (CANVAS ENGINE) 
-// =========================================================================
-let vGapChartHistory = { oficial: [], paralelo: [] }; 
-let currentGraphType = 'paralelo'; 
-let chartIsExpanded = false;
-
-window.toggleChart = () => {
-    chartIsExpanded = !chartIsExpanded;
-    getEl('chartContent').classList.toggle('collapsed');
-    getEl('chartChevron').classList.toggle('rotate');
-    
-    if(chartIsExpanded) {
-        setTimeout(() => { renderActiveChartGraph(); }, 150);
-    }
-}
-
-window.switchChartType = (type) => {
-    currentGraphType = type;
-    getEl('tabBinChart').classList.toggle('active', type === 'paralelo');
-    getEl('tabBcvChart').classList.toggle('active', type === 'oficial');
-    renderActiveChartGraph(); 
-}
-
-const formatChartDateLabel = (date) => {
-    const month = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][date.getMonth()];
-    return `${String(date.getDate()).padStart(2,'0')} ${month}`;
-}
-
-// LÓGICA DE EXTRACCIÓN HISTÓRICA AISLADA Y REPARADA
-async function backgroundPreloadChart() {
-   try {
-       const resp = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + new Date().getTime());
-       const dapiNodesArray = await resp.json();
-       let foundValidosOfi = [];
-       let foundValidosPara = [];
-       
-       if (Array.isArray(dapiNodesArray)) {
-           // Filtramos y separamos rigurosamente
-           dapiNodesArray.forEach(item => {
-               const fuente = String(item.fuente || item.casa || item.nombre || "").toLowerCase();
-               
-               // Corrección de zona horaria para que no atrase un día
-               const dt = new Date((item.fecha || item.fechaActualizacion) + "T12:00:00");
-               const val = parseFloat(item.promedio || item.valor || item.venta || 0);
-
-               if (!isNaN(dt.getTime()) && val > 0) {
-                   if (fuente === 'oficial') {
-                       foundValidosOfi.push({ d: dt, val: val });
-                   } else if (fuente === 'paralelo') {
-                       foundValidosPara.push({ d: dt, val: val });
-                   }
-               }
-           });
-       }
-
-       // Separación absoluta: ordenamos por fecha y nos quedamos con los últimos 30 días de cada uno independientemente.
-       vGapChartHistory.oficial = (foundValidosOfi.length < 5) ? genMock('bcv') : foundValidosOfi.sort((a,b) => a.d.getTime() - b.d.getTime()).slice(-30);
-       vGapChartHistory.paralelo = (foundValidosPara.length < 5) ? genMock('bin') : foundValidosPara.sort((a,b) => a.d.getTime() - b.d.getTime()).slice(-30);
-       
-   } catch(e) {
-       vGapChartHistory.oficial = genMock('bcv');
-       vGapChartHistory.paralelo = genMock('bin');
-   }
-}
-
-// Simulador de fluctuaciones de respaldo
-function genMock(originSource) {
-   let baseValue = originSource === 'bcv' ? parseFloat(bcvMemoryStack[bcvMemoryStack.length-1])|| 41.0 : parseFloat(binanceMemoryStack[binanceMemoryStack.length-1])||49.5;
-   let simulatedBaseArrayObj = []; 
-   let hoyBaseRef = new Date();
-   let walkerVar = baseValue * 0.94; 
-   
-   for (let nOffsetT = 30; nOffsetT >= 0; nOffsetT--) {
-      let dxTmpIndexPointMap = new Date(hoyBaseRef);
-      dxTmpIndexPointMap.setDate(dxTmpIndexPointMap.getDate() - nOffsetT);
-      walkerVar = walkerVar + (walkerVar * (Math.random() * 0.012 - 0.003)); 
-      simulatedBaseArrayObj.push({ d: dxTmpIndexPointMap, val: walkerVar });
-   }
-   
-   simulatedBaseArrayObj[simulatedBaseArrayObj.length -1].val = baseValue; 
-   return simulatedBaseArrayObj;
-}
-
-// --- MOTOR GRÁFICO (CANVAS RENDERER) ---
-function renderActiveChartGraph() {
-   const cvs = getEl('ultraHistoryCanvas');
-   if (!cvs || !chartIsExpanded) return;
-   
-   const themeKey = document.body.getAttribute('data-theme') || 'light';
-   const uiRed = '#FF453A'; 
-   const uiGreen = '#32D74B';
-   
-   const rectBound = cvs.parentElement.getBoundingClientRect();
-   if(rectBound.width === 0) return;
-
-   const dprScaleFactor = window.devicePixelRatio || 1;
-   cvs.width = rectBound.width * dprScaleFactor;
-   cvs.height = rectBound.height * dprScaleFactor;
-   const ctx = cvs.getContext('2d');
-   ctx.scale(dprScaleFactor, dprScaleFactor);
-   
-   let logicalPixelsW = rectBound.width;
-   let logicalPixelsH = rectBound.height;
-   
-   // Dibuja estrictamente los datos de la pestaña activa (aislados)
-   const historyData = vGapChartHistory[currentGraphType] || [];
-   if(historyData.length === 0) return;
-   
-   const mapRates = historyData.map(v => v.val);
-   const absMax = Math.max(...mapRates);
-   const absMin = Math.min(...mapRates);
-   
-   const gapDiff = absMax - absMin === 0 ? 1 : absMax - absMin;
-   const pTopPadding = absMax + (gapDiff * 0.20); 
-   const pBotPadding = absMin - (gapDiff * 0.20); 
-
-   const startVal = mapRates[0];
-   const endVal = mapRates[mapRates.length-1];
-   
-   const mainColor = endVal >= startVal ? uiGreen : uiRed;
-   const gradientColor = mainColor === uiGreen ? 'rgba(50,215,75,0.25)' : 'rgba(255,69,58,0.25)';
-   
-   const updateLabels = (pointIdx) => {
-        let activePoint = historyData[pointIdx];
-        getEl('hudDate').innerText = formatChartDateLabel(activePoint.d);
-        const hudValueEl = getEl('hudValue');
-        hudValueEl.innerText = new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(activePoint.val) + ' Bs';
-        hudValueEl.style.color = activePoint.val >= historyData[Math.max(0, pointIdx - 1)].val ? uiGreen : uiRed;
-        
-        drawPath(pointIdx);
-   }
-
-   function drawPath(focusIndex = null) {
-      ctx.clearRect(0,0, logicalPixelsW, logicalPixelsH);
-      
-      let fillGradient= ctx.createLinearGradient(0, 0, 0, logicalPixelsH);
-      fillGradient.addColorStop(0, gradientColor);
-      fillGradient.addColorStop(1, "rgba(0,0,0,0)");
-      
-      const pts = [];
-      historyData.forEach((pt, idx, arr) => {
-          let cx = (idx / (arr.length - 1)) * logicalPixelsW; 
-          let cy = logicalPixelsH - ((pt.val - pBotPadding) / (pTopPadding - pBotPadding) * logicalPixelsH);
-          pts.push({x: cx, y: cy, originalIndex: idx});
-      });
-      
-      ctx.beginPath();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 1; i < pts.length; i++){
-          ctx.lineTo(pts[i].x, pts[i].y);
-      }
-      
-      const fillPath = new Path2D(ctx.path || ''); 
-      ctx.lineTo(logicalPixelsW, logicalPixelsH);
-      ctx.lineTo(0, logicalPixelsH);
-      ctx.fillStyle = fillGradient; 
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = mainColor;
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for(let i = 1; i < pts.length; i++) {
-          ctx.lineTo(pts[i].x, pts[i].y);
-      }
-      ctx.stroke();
-
-      if(focusIndex !== null) {
-          const hoveredPt = pts[focusIndex];
-          const trackColor = themeKey === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
-          ctx.lineWidth = 1; 
-          ctx.strokeStyle = trackColor;
-          ctx.beginPath();
-          ctx.moveTo(hoveredPt.x, 0); 
-          ctx.lineTo(hoveredPt.x, logicalPixelsH); 
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.fillStyle = themeKey === 'dark' ? '#000000' : '#ffffff'; 
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = mainColor; 
-          ctx.arc(hoveredPt.x, hoveredPt.y, 6, 0, Math.PI * 2); 
-          ctx.fill(); 
-          ctx.stroke(); 
-      }
-   }
-
-   const handleTouchMove = (e) => {
-       const bounds = cvs.getBoundingClientRect(); 
-       let clientX = (e.touches && e.touches.length > 0) ? e.touches[0].clientX : e.clientX; 
-       let xPos = Math.max(0, Math.min(bounds.width, clientX - bounds.left)); 
-       
-       const snappedIndex = Math.round((xPos / bounds.width) * (historyData.length - 1)); 
-       updateLabels(snappedIndex); 
-   };
-
-   const freshCanvas = cvs.cloneNode(true);
-   cvs.parentNode.replaceChild(freshCanvas, cvs);
-
-   freshCanvas.addEventListener('pointermove', handleTouchMove);
-   freshCanvas.addEventListener('touchmove', handleTouchMove, {passive: true}); 
-
-   freshCanvas.addEventListener('pointerleave', () => {
-        updateLabels(historyData.length - 1); 
-        drawPath(null); 
-   });
-
-   updateLabels(historyData.length - 1); 
-   drawPath(null); 
-}
