@@ -79,22 +79,23 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (REPARADO USANDO EL ENLACE DIRECTO QUE PEDISTE) ---
+// --- BUSCADOR BCV (USANDO LA NUEVA API MÁS RÁPIDA DE PYDOLAR) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        // Usa la ruta exacta que proporcionaste (devuelve objeto JSON directo)
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + new Date().getTime());
+        const r = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=bcv&t=' + new Date().getTime());
         const data = await r.json();
         
-        if (data && data.promedio) {
-            input.value = parseFloat(data.promedio).toFixed(2);
+        // Extraemos el valor directo del USD de la nueva API
+        const bcvData = data.monitors && data.monitors.usd;
+        
+        if (bcvData && bcvData.price) {
+            input.value = parseFloat(bcvData.price).toFixed(2);
             
-            const apiDate = new Date(data.fechaActualizacion);
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
             
             badge.innerText = "AUTO";
             sync('ratebcv');
@@ -137,14 +138,13 @@ window.openChartModal = async () => {
     
     if(rawHistoryData.oficial.length === 0) {
         try {
-            // Usa el enlace de históricos que proporcionaste
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
             const data = await r.json();
             
-            // SEPARAMOS LA DATA PARA QUE LAS FECHAS NO CHOQUEN (Pestañas independientes)
+            // SEPARAMOS LA DATA PARA QUE LAS FECHAS NO CHOQUEN
             let dataOfi = data.filter(d => d.fuente === 'oficial')
                               .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
-                              .slice(-15); // Últimos 15 días
+                              .slice(-15); 
             
             let dataPar = data.filter(d => d.fuente === 'paralelo')
                               .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
