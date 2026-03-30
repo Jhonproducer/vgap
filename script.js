@@ -3,8 +3,9 @@ const getEl = (id) => document.getElementById(id);
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
-let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
-let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
+// Pilas de memoria para recordar tasas anteriores
+let binanceMemoryStack = JSON.parse(localStorage.getItem('vgap_binance_stack')) || ["613.54"];
+let bcvMemoryStack = JSON.parse(localStorage.getItem('vgap_bcv_stack')) || ["421.87"];
 
 let historicalChartInstance = null;
 let currentChartType = 'paralelo'; 
@@ -28,11 +29,13 @@ window.toggleThemeSwitch = () => {
     if(historicalChartInstance) renderChartJs(); 
 };
 
+// --- LÓGICA BCV CON MEMORIA ANTERIOR ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
     const container = getEl('bcvContainer');
+    
     if (isBcvApi) {
         badge.innerText = "...";
         badge.className = "mode-badge api-bcv";
@@ -43,17 +46,26 @@ window.toggleBcv = async () => {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
-        input.value = bcvMemoryStack[bcvMemoryStack.length - 1];
+        
+        // Al pasar a manual, ponemos la tasa anterior si existe en memoria
+        if(bcvMemoryStack.length > 1) {
+            input.value = bcvMemoryStack[bcvMemoryStack.length - 2];
+        } else {
+            input.value = bcvMemoryStack[bcvMemoryStack.length - 1];
+        }
+        
         sync('ratebcv');
         container.classList.add('unlocked');
         input.focus();
     }
 };
 
+// --- LÓGICA BINANCE CON MEMORIA ANTERIOR ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
+    
     if (isBinanceApi) {
         badge.innerText = "...";
         badge.className = "mode-badge api-binance";
@@ -63,43 +75,44 @@ window.toggleBinance = async () => {
         badge.innerText = "MANUAL";
         badge.className = "mode-badge manual-mode";
         input.disabled = false;
-        input.value = binanceMemoryStack[binanceMemoryStack.length - 1];
+        
+        // Propone la tasa anterior guardada
+        if(binanceMemoryStack.length > 1) {
+            input.value = binanceMemoryStack[binanceMemoryStack.length - 2];
+        } else {
+            input.value = binanceMemoryStack[binanceMemoryStack.length - 1];
+        }
+        
         sync('ratebinance');
         input.focus();
     }
 };
 
-// --- MOTOR INTELIGENTE: USA EL HISTORIAL PARA LA TASA PRINCIPAL ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
-
     try {
-        // Consultamos la API de históricos porque tú mismo viste que ahí sí está el dato nuevo
         const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
         const data = await r.json();
-        
-        // Filtramos solo BCV y ordenamos por fecha (el más reciente al final)
-        const bcvHist = data.filter(d => d.fuente === 'oficial')
-                            .sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+        const bcvHist = data.filter(d => d.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
 
         if (bcvHist.length > 0) {
-            const latest = bcvHist[bcvHist.length - 1];
-            input.value = parseFloat(latest.promedio).toFixed(2);
+            const val = parseFloat(bcvHist[bcvHist.length - 1].promedio).toFixed(2);
+            input.value = val;
             
-            // Guardamos la data para no volver a descargarla al abrir el gráfico
+            // Guardar en stack si es diferente al último
+            if(val !== bcvMemoryStack[bcvMemoryStack.length-1]) {
+                bcvMemoryStack.push(val);
+                if(bcvMemoryStack.length > 10) bcvMemoryStack.shift();
+                localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
+            }
+
             rawHistoryData.oficial = bcvHist.slice(-15);
-            
-            const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
-            
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
             badge.innerText = "AUTO";
             sync('ratebcv');
-        } else { throw new Error(); }
-    } catch (e) {
-        badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBcv(), 1000); 
-    }
+        }
+    } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBcv(), 1000); }
 };
 
 window.fetchBinanceOnly = async () => {
@@ -110,19 +123,24 @@ window.fetchBinanceOnly = async () => {
         const data = await r.json();
         const binData = data.find(item => item.fuente === 'paralelo');
         if (binData && binData.promedio) {
-            input.value = parseFloat(binData.promedio).toFixed(2);
+            const val = parseFloat(binData.promedio).toFixed(2);
+            input.value = val;
+            
+            if(val !== binanceMemoryStack[binanceMemoryStack.length-1]) {
+                binanceMemoryStack.push(val);
+                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
+                localStorage.setItem('vgap_binance_stack', JSON.stringify(binanceMemoryStack));
+            }
+            
             badge.innerText = "AUTO";
             sync('ratebinance');
         }
-    } catch (e) {
-        badge.innerText = "ERROR";
-        setTimeout(() => window.toggleBinance(), 1000);
-    }
+    } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBinance(), 1000); }
 };
 
+// --- GRÁFICOS Y RESTO DE FUNCIONES (INTACTAS) ---
 window.openChartModal = async () => {
     getEl('chartModal').classList.remove('hidden');
-    // Si por alguna razón no hay data de Binance, la buscamos
     if(rawHistoryData.paralelo.length === 0) {
         try {
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
@@ -137,7 +155,6 @@ window.openChartModal = async () => {
 };
 
 window.closeChartModal = () => getEl('chartModal').classList.add('hidden');
-
 window.switchChartType = (type) => {
     currentChartType = type;
     getEl('tabChartParalelo').classList.toggle('active', type === 'paralelo');
