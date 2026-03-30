@@ -79,43 +79,75 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (BLINDADO CON PYDOLARVENEZUELA + RESPALDO) ---
+// --- BUSCADOR BCV (SÚPER CAZADOR REPARADO CON FOCO EN CRIPTODOLAR) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        // INTENTO 1: Usamos la API web de pyDolarVenezuela (la que se actualiza en la tarde al instante)
-        const r = await fetch('https://pydolarve.org/api/v1/dollar?page=bcv&t=' + Date.now());
-        const data = await r.json();
+        let pricesFound = [];
+        const t = Date.now();
         
-        if (data && data.monitors && data.monitors.usd && data.monitors.usd.price) {
-            input.value = parseFloat(data.monitors.usd.price).toFixed(2);
+        // 1. CAZADOR CRIPTODOLAR (Buscamos la que verificaste que sí funciona)
+        try {
+            const r1 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=criptodolar&t=' + t);
+            const d1 = await r1.json();
+            if (d1 && d1.monitors) {
+                for (let k in d1.monitors) {
+                    if (k.toLowerCase().includes('bcv') || (d1.monitors[k].title && d1.monitors[k].title.toLowerCase().includes('bcv'))) {
+                        pricesFound.push(parseFloat(String(d1.monitors[k].price).replace(',', '.')));
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 2. CAZADOR AL CAMBIO
+        try {
+            const r2 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=alcambio&t=' + t);
+            const d2 = await r2.json();
+            if (d2 && d2.monitors) {
+                for (let k in d2.monitors) {
+                    if (k.toLowerCase().includes('bcv') || (d2.monitors[k].title && d2.monitors[k].title.toLowerCase().includes('bcv'))) {
+                        pricesFound.push(parseFloat(String(d2.monitors[k].price).replace(',', '.')));
+                    }
+                }
+            }
+        } catch(e) {}
+
+        // 3. CAZADOR OFICIAL PYDOLAR
+        try {
+            const r3 = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=bcv&t=' + t);
+            const d3 = await r3.json();
+            if (d3 && d3.monitors && d3.monitors.usd) {
+                pricesFound.push(parseFloat(String(d3.monitors.usd.price).replace(',', '.')));
+            }
+        } catch(e) {}
+
+        // 4. CAZADOR VIEJO DE DOLARAPI (Respaldo)
+        try {
+            const r4 = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + t);
+            const d4 = await r4.json();
+            if (d4 && d4.promedio) pricesFound.push(parseFloat(d4.promedio));
+        } catch(e) {}
+
+        // ELECCIÓN FINAL: Extraemos solo números válidos y elegimos el más alto
+        const validPrices = pricesFound.filter(p => !isNaN(p) && p > 0);
+
+        if (validPrices.length > 0) {
+            const topPrice = Math.max(...validPrices);
+            input.value = topPrice.toFixed(2);
+            
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
+            
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
-            throw new Error("Estructura de pyDolar distinta");
+            throw new Error("Todas las APIs fallaron");
         }
-    } catch (e1) {
-        // INTENTO 2: Si pyDolarVenezuela está caída, usamos la DolarApi anterior como respaldo para no quedarnos en blanco
-        try {
-            const r2 = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + Date.now());
-            const data2 = await r2.json();
-            if (data2 && data2.promedio) {
-                input.value = parseFloat(data2.promedio).toFixed(2);
-                const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-                getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
-                badge.innerText = "AUTO";
-                sync('ratebcv');
-            } else { 
-                throw new Error("Ambas APIs fallaron"); 
-            }
-        } catch (e2) {
-            badge.innerText = "ERROR";
-            setTimeout(() => window.toggleBcv(), 1000); 
-        }
+    } catch (e) {
+        badge.innerText = "ERROR";
+        setTimeout(() => window.toggleBcv(), 1000); 
     }
 };
 
@@ -149,6 +181,7 @@ window.openChartModal = async () => {
     
     if(rawHistoryData.oficial.length === 0) {
         try {
+            // Este endpoint NO SE TOCA, sigue usando la estructura que garantiza que tu gráfico se vea bien
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
             const data = await r.json();
             
