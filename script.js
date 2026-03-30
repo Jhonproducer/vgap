@@ -6,18 +6,15 @@ let isBinanceApi = true;
 let binanceMemoryStack = [localStorage.getItem('vgap_binance') || "613.54"];
 let bcvMemoryStack = [localStorage.getItem('vgap_bcv') || "421.87"];
 
-// Para el Gráfico Modal Chart.js
 let historicalChartInstance = null;
 let currentChartType = 'paralelo'; 
 let rawHistoryData = { oficial: [], paralelo: [] };
 
-// --- PANTALLA DE BIENVENIDA Y TEMA ---
 window.startApp = (theme) => {
     document.body.setAttribute('data-theme', theme);
     getEl('themeToggleCheckbox').checked = theme === 'dark';
     document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    
     getEl('welcomeScreen').classList.add('hidden');
     getEl('mainApp').style.opacity = '1';
 };
@@ -28,19 +25,14 @@ window.toggleThemeSwitch = () => {
     document.body.setAttribute('data-theme', theme);
     document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#000000' : '#F2F2F7');
     localStorage.setItem('vgap_theme_saved', theme);
-    
-    if(historicalChartInstance) {
-        renderChartJs(); 
-    }
+    if(historicalChartInstance) renderChartJs(); 
 };
 
-// --- LÓGICA BCV ---
 window.toggleBcv = async () => {
     isBcvApi = !isBcvApi;
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
     const container = getEl('bcvContainer');
-    
     if (isBcvApi) {
         badge.innerText = "...";
         badge.className = "mode-badge api-bcv";
@@ -58,12 +50,10 @@ window.toggleBcv = async () => {
     }
 };
 
-// --- LÓGICA BINANCE ---
 window.toggleBinance = async () => {
     isBinanceApi = !isBinanceApi;
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
-    
     if (isBinanceApi) {
         badge.innerText = "...";
         badge.className = "mode-badge api-binance";
@@ -79,51 +69,50 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- BUSCADOR BCV (REPARADO USANDO EL ENLACE DIRECTO QUE PEDISTE) ---
+// --- MOTOR INTELIGENTE: USA EL HISTORIAL PARA LA TASA PRINCIPAL ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
 
     try {
-        // Usa la ruta exacta que proporcionaste (devuelve objeto JSON directo)
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares/oficial?t=' + new Date().getTime());
+        // Consultamos la API de históricos porque tú mismo viste que ahí sí está el dato nuevo
+        const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
         const data = await r.json();
         
-        if (data && data.promedio) {
-            input.value = parseFloat(data.promedio).toFixed(2);
+        // Filtramos solo BCV y ordenamos por fecha (el más reciente al final)
+        const bcvHist = data.filter(d => d.fuente === 'oficial')
+                            .sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+
+        if (bcvHist.length > 0) {
+            const latest = bcvHist[bcvHist.length - 1];
+            input.value = parseFloat(latest.promedio).toFixed(2);
             
-            const apiDate = new Date(data.fechaActualizacion);
+            // Guardamos la data para no volver a descargarla al abrir el gráfico
+            rawHistoryData.oficial = bcvHist.slice(-15);
+            
             const options = { timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true };
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(apiDate)} VEN`;
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', options).format(new Date())} VEN`;
             
             badge.innerText = "AUTO";
             sync('ratebcv');
-        } else {
-            throw new Error("Sin datos de BCV");
-        }
+        } else { throw new Error(); }
     } catch (e) {
         badge.innerText = "ERROR";
         setTimeout(() => window.toggleBcv(), 1000); 
     }
 };
 
-// --- BUSCADOR PARALELO (BINANCE) ---
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
-
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + new Date().getTime());
+        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
         const data = await r.json();
-        
-        const paraleloData = data.find(item => item.fuente === 'paralelo');
-        
-        if (paraleloData && paraleloData.promedio) {
-            input.value = parseFloat(paraleloData.promedio).toFixed(2);
+        const binData = data.find(item => item.fuente === 'paralelo');
+        if (binData && binData.promedio) {
+            input.value = parseFloat(binData.promedio).toFixed(2);
             badge.innerText = "AUTO";
             sync('ratebinance');
-        } else {
-            throw new Error("Sin datos de Paralelo");
         }
     } catch (e) {
         badge.innerText = "ERROR";
@@ -131,169 +120,78 @@ window.fetchBinanceOnly = async () => {
     }
 };
 
-// --- EL GRÁFICO HISTÓRICO SEPARADO POR PESTAÑAS (CHART.JS) ---
 window.openChartModal = async () => {
     getEl('chartModal').classList.remove('hidden');
-    
-    if(rawHistoryData.oficial.length === 0) {
+    // Si por alguna razón no hay data de Binance, la buscamos
+    if(rawHistoryData.paralelo.length === 0) {
         try {
-            // Usa el enlace de históricos que proporcionaste
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
             const data = await r.json();
-            
-            // SEPARAMOS LA DATA PARA QUE LAS FECHAS NO CHOQUEN (Pestañas independientes)
-            let dataOfi = data.filter(d => d.fuente === 'oficial')
-                              .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
-                              .slice(-15); // Últimos 15 días
-            
-            let dataPar = data.filter(d => d.fuente === 'paralelo')
-                              .sort((a,b) => new Date(a.fecha) - new Date(b.fecha))
-                              .slice(-15); 
-            
-            rawHistoryData.oficial = dataOfi;
-            rawHistoryData.paralelo = dataPar;
-        } catch(e) { 
-            console.error("Error API Gráfico", e); 
-        }
+            rawHistoryData.paralelo = data.filter(d => d.fuente === 'paralelo').sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).slice(-15);
+            if(rawHistoryData.oficial.length === 0) {
+                rawHistoryData.oficial = data.filter(d => d.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).slice(-15);
+            }
+        } catch(e) {}
     }
-    
     renderChartJs();
-}
+};
 
-window.closeChartModal = () => {
-    getEl('chartModal').classList.add('hidden');
-}
+window.closeChartModal = () => getEl('chartModal').classList.add('hidden');
 
 window.switchChartType = (type) => {
     currentChartType = type;
     getEl('tabChartParalelo').classList.toggle('active', type === 'paralelo');
     getEl('tabChartBcv').classList.toggle('active', type === 'oficial');
     renderChartJs(); 
-}
+};
 
 function renderChartJs() {
     const ctx = getEl('historyChart').getContext('2d');
     const isDark = document.body.getAttribute('data-theme') === 'dark';
-    
     const currentDataList = rawHistoryData[currentChartType];
     if(!currentDataList || currentDataList.length === 0) return;
-
-    const labels = currentDataList.map(d => {
-        let date = new Date(d.fecha + "T12:00:00");
-        return date.toLocaleDateString('es-VE', {day: '2-digit', month: 'short'});
-    });
+    const labels = currentDataList.map(d => new Date(d.fecha + "T12:00:00").toLocaleDateString('es-VE', {day: '2-digit', month: 'short'}));
     const prices = currentDataList.map(d => parseFloat(d.promedio));
-    
-    const isParalelo = currentChartType === 'paralelo';
-    const color = isParalelo ? '#FF9F0A' : '#0A84FF';
-    const bgColor = isParalelo ? 'rgba(255, 159, 10, 0.15)' : 'rgba(10, 132, 255, 0.15)';
-
-    if(historicalChartInstance) {
-        historicalChartInstance.destroy();
-    }
-
+    const isPar = currentChartType === 'paralelo';
+    const color = isPar ? '#FF9F0A' : '#0A84FF';
+    if(historicalChartInstance) historicalChartInstance.destroy();
     historicalChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: labels,
             datasets: [{
-                label: isParalelo ? 'Paralelo' : 'BCV',
                 data: prices,
                 borderColor: color,
-                backgroundColor: bgColor,
+                backgroundColor: isPar ? 'rgba(255, 159, 10, 0.15)' : 'rgba(10, 132, 255, 0.15)',
                 borderWidth: 3,
                 fill: true,
                 pointRadius: 4,
-                pointBackgroundColor: color,
                 tension: 0.3 
             }]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false, 
-            plugins: {
-                legend: {display: false},
-                tooltip: {
-                    mode: 'index',
-                    intersect: false,
-                    backgroundColor: isDark ? 'rgba(28,28,30,0.9)' : 'rgba(255,255,255,0.9)',
-                    titleColor: isDark ? '#FFF' : '#000',
-                    bodyColor: isDark ? '#FFF' : '#000',
-                    borderColor: isDark ? '#333335' : '#D1D1D6',
-                    borderWidth: 1,
-                    displayColors: false,
-                    callbacks: {
-                        label: function(context) { 
-                            return 'Bs ' + context.parsed.y.toFixed(2); 
-                        }
-                    }
-                }
-            },
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: {display: false}, tooltip: { mode: 'index', intersect: false } },
             scales: {
-                x: { 
-                    grid: {display: false}, 
-                    ticks: {color: isDark ? '#8E8E93' : '#636366', maxTicksLimit: 7} 
-                },
-                y: { 
-                    grid: {color: isDark ? '#333335' : '#D1D1D6', borderDash: [5, 5]}, 
-                    ticks: {color: isDark ? '#8E8E93' : '#636366'} 
-                }
-            },
-            interaction: {
-                mode: 'nearest',
-                axis: 'x',
-                intersect: false
+                x: { ticks: {color: isDark ? '#8E8E93' : '#636366'} },
+                y: { grid: {color: isDark ? '#333335' : '#D1D1D6', borderDash: [5,5]}, ticks: {color: isDark ? '#8E8E93' : '#636366'} }
             }
         }
     });
 }
 
-// --- ARRANQUE Y EVENTOS PRINCIPALES ---
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
         getEl('welcomeScreen').style.display = 'none';
         document.body.setAttribute('data-theme', savedTheme);
         getEl('themeToggleCheckbox').checked = savedTheme === 'dark';
-        document.querySelector('meta[name="theme-color"]').setAttribute('content', savedTheme === 'dark' ? '#000000' : '#F2F2F7');
         getEl('mainApp').style.opacity = '1';
     }
-
     fetchBcvOnly();
     fetchBinanceOnly(); 
-    
-    getEl('rateBinance').addEventListener('blur', (e) => {
-        if(!isBinanceApi) {
-            const val = e.target.value;
-            if(!val || parseFloat(val) <= 0) {
-                e.target.value = binanceMemoryStack[binanceMemoryStack.length - 1]; 
-                sync('ratebinance');
-            } else {
-                binanceMemoryStack.push(val);
-                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
-                localStorage.setItem('vgap_binance', val);
-            }
-        }
-    });
-
-    getEl('rateBcv').addEventListener('blur', (e) => {
-        if(!isBcvApi) {
-            const val = e.target.value;
-            if(!val || parseFloat(val) <= 0) {
-                e.target.value = bcvMemoryStack[bcvMemoryStack.length - 1]; 
-                sync('ratebcv');
-            } else {
-                bcvMemoryStack.push(val);
-                if(bcvMemoryStack.length > 10) bcvMemoryStack.shift();
-                localStorage.setItem('vgap_bcv', val);
-            }
-        }
-    });
-    
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
-        getEl(id).addEventListener('input', (e) => {
-            sync(id.replace('input', '').toLowerCase());
-        });
+        getEl(id).addEventListener('input', () => sync(id.replace('input', '').toLowerCase()));
     });
 };
 
@@ -302,7 +200,6 @@ const sync = (origin) => {
     const p2p = parseFloat(getEl('rateBinance').value) || 1;
     const com = 0.06;
     const usd = getEl('inputUsd'), usdt = getEl('inputUsdt'), bs = getEl('inputBs');
-
     if (origin === 'usd' || origin === 'ratebcv') {
         const v = parseFloat(usd.value) || 0;
         bs.value = v > 0 ? (v * bcv).toFixed(2) : "";
