@@ -235,11 +235,31 @@ const sync = (origin) => {
 };
 
 const updateUI = () => {
-    const bcv = parseFloat(getEl('rateBcv').value) || 1, p2p = parseFloat(getEl('rateBinance').value) || 1, bs = parseFloat(getEl('inputBs').value) || 0;
+    const bcv = parseFloat(getEl('rateBcv').value) || 1;
+    const p2p = parseFloat(getEl('rateBinance').value) || 1;
+    const bs = parseFloat(getEl('inputBs').value) || 0;
+    const usdtRaw = parseFloat(getEl('inputUsdt').value) || 0;
+    
     getEl('bigBsDisplay').innerText = new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(bs) + " Bs";
-    getEl('powerUsd').innerText = bs > 0 ? (bs / bcv).toFixed(2) : "0.00";
+    const power = bs > 0 ? (bs / bcv) : 0;
+    getEl('powerUsd').innerText = power.toFixed(2);
     getEl('brechaBadge').innerText = (((p2p - bcv)/bcv)*100).toFixed(2) + "%";
     getEl('factorBadge').innerText = (p2p/bcv).toFixed(2) + "x";
+
+    // AÑADIDO: CÁLCULO GANANCIA EXTRA
+    const usdtNeto = usdtRaw > 0.06 ? usdtRaw - 0.06 : 0;
+    const profitArea = getEl('profitArea');
+    const extraEl = getEl('extraProfit');
+    
+    if (bs > 0 && usdtNeto > 0 && power > usdtNeto) {
+        const extra = power - usdtNeto;
+        if(extraEl && profitArea) {
+            extraEl.innerText = "+$" + extra.toFixed(2);
+            profitArea.style.display = 'inline-block';
+        }
+    } else {
+        if(profitArea) profitArea.style.display = 'none';
+    }
 };
 
 window.copyToClipboard = async () => {
