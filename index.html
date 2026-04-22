@@ -1,19 +1,15 @@
 <!DOCTYPE html>
-<html lang="es" translate="no">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="google" content="notranslate">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#000000">
     <link rel="manifest" href="manifest.json">
     <title>V-Gap Ultra</title>
-    
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <link rel="stylesheet" href="style.css?v=6.0">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -21,22 +17,15 @@
     <div class="welcome-content">
         <h2 class="welcome-title">¿CÓMO QUIERES V-GAP ULTRA?</h2>
         <div class="welcome-buttons">
-            <button class="btn-theme-select btn-light" onclick="startApp('light')">
-                <span class="emoji">☀️</span> MODO CLARO
-            </button>
-            <button class="btn-theme-select btn-dark" onclick="startApp('dark')">
-                <span class="emoji">🌙</span> MODO OSCURO
-            </button>
+            <button class="btn-theme-select btn-light" onclick="startApp('light')">☀️ MODO CLARO</button>
+            <button class="btn-theme-select btn-dark" onclick="startApp('dark')">🌙 MODO OSCURO</button>
         </div>
     </div>
 </div>
 
-<div class="app-container" id="mainApp" style="opacity: 0;">
+<div class="app-container" id="mainApp">
   <div class="top-nav">
-    <div class="logo-area">
-      <div class="logo-icon">V</div>
-      <span class="logo-text">Gap</span>
-    </div>
+    <div class="logo-area"><div class="logo-icon">V</div><span class="logo-text">Gap</span></div>
     <div class="nav-right">
       <span id="liveIndicator" class="live-tag">LIVE</span>
       <label class="theme-switch tooltip">
@@ -45,7 +34,6 @@
           <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
           <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         </span>
-        <span class="tooltiptext">Modo Oscuro / Claro</span>
       </label>
     </div>
   </div>
@@ -53,30 +41,15 @@
   <div class="header">
     <div class="timestamp" id="lastUpdate">Actualizando...</div>
     <div class="gap-group tooltip">
-      <button class="mini-chart-btn" onclick="openChartModal()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-      </button>
-      <div class="gap-texts">
-          <div id="brechaBadge" class="gap-badge">0.00%</div>
-          <div id="factorBadge" class="factor-text">1.00x</div>
-      </div>
-      <span class="tooltiptext">Diferencia porcentual y Gráfico Histórico.</span>
+      <div id="brechaBadge" class="gap-badge">0.00%</div>
+      <div id="factorBadge" class="factor-text">1.00x</div>
     </div>
   </div>
 
   <div class="input-grid">
     <div class="input-field bcv-field" id="bcvContainer">
       <div class="label-row">
-        <label class="tooltip">
-          <a href="https://www.bcv.org.ve/" target="_blank" rel="noopener noreferrer" style="display: inline-flex; text-decoration: none; color: inherit;">
-            <svg viewBox="0 0 100 100" class="mini-icon bcv-logo">
-              <circle cx="50" cy="50" r="50" fill="#0A3B7C"/>
-              <circle cx="50" cy="50" r="42" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
-              <text x="50" y="62" text-anchor="middle" fill="#FFFFFF" font-size="32" font-family="Times New Roman, serif" font-weight="bold" letter-spacing="1">BCV</text>
-            </svg>
-          </a>
-          BCV ⓘ <span class="tooltiptext">Tasa oficial del Banco Central.</span>
-        </label>
+        <label>BCV ⓘ</label>
         <div id="badgeBcv" class="mode-badge api-bcv" onclick="toggleBcv()">AUTO</div>
       </div>
       <input type="number" id="rateBcv" inputmode="decimal" step="0.01" disabled>
@@ -84,30 +57,25 @@
 
     <div class="input-field" id="binanceContainer">
       <div class="label-row">
-        <label class="tooltip">
-          <svg viewBox="0 0 24 24" class="mini-icon binance-logo">
-            <path fill="#F3BA2F" d="M11.996 9.604L9.593 12l2.403 2.396L14.4 12l-2.404-2.396zM11.996 2.396L16.8 7.2l-2.402 2.404-2.402-2.404-2.403 2.404L7.19 7.2l4.806-4.804zM16.8 16.8l2.402-2.404L21.604 12l-2.402-2.404-2.404 2.404 2.404 2.404L16.8 16.8zm-9.604 0L4.793 14.4l2.403-2.404L4.793 9.592 2.39 12l2.403 2.404L7.196 16.8zm4.8 4.804L7.19 16.8l2.403-2.404 2.403 2.404 2.402-2.404L16.8 16.8l-4.804 4.8z"/>
-          </svg>
-          BINANCE ⓘ <span class="tooltiptext">Tasa P2P Venta USDT.</span>
-        </label>
+        <label>BINANCE ⓘ</label>
         <div id="badgeBinance" class="mode-badge api-binance" onclick="toggleBinance()">AUTO</div>
       </div>
       <input type="number" id="rateBinance" inputmode="decimal" step="0.01" disabled>
     </div>
 
     <div class="input-field">
-      <label class="tooltip">$ BCV ⓘ <span class="tooltiptext">Dólares a tasa oficial.</span></label>
+      <label>$ BCV ⓘ</label>
       <input type="number" id="inputUsd" inputmode="decimal" placeholder="0.00">
     </div>
     
     <div class="input-field highlight-border">
-      <label class="tooltip">USDT ⓘ <span class="tooltiptext">Cripto dólares (Inc. comisión 0.06).</span></label>
+      <label>USDT ⓘ</label>
       <input type="number" id="inputUsdt" inputmode="decimal" placeholder="0.00">
     </div>
 
     <div class="input-field full-width">
       <div class="label-row">
-        <label class="tooltip">BOLÍVARES (Bs) ⓘ <span class="tooltiptext">Monto total en moneda nacional.</span></label>
+        <label>BOLÍVARES (Bs)</label>
         <button class="icon-btn-copy" onclick="copyInputBs()">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
@@ -119,35 +87,38 @@
   <button class="btn-clear" onclick="resetAll()">Limpiar Todo</button>
 
   <div class="result-card">
-    <p class="card-title" style="margin-bottom:2px; font-weight:800; font-size:11px; color:var(--text-dim);">RECIBES NETO</p>
+    <p class="card-title">RECIBES NETO</p>
     <h2 id="bigBsDisplay">0,00 Bs</h2>
-    <button class="btn-copy-elegant" onclick="copyToClipboard()">
-      <span>COPIAR MONTO</span>
-    </button>
+    <button class="btn-copy-elegant" onclick="copyToClipboard()">COPIAR MONTO</button>
+    
     <div class="vender-info">
-      Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
+      Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label">$ BCV</span>
+    </div>
+
+    <div id="profitArea" class="profit-badge" style="display:none;">
+        Ganancia extra: <span id="extraProfit">+$0.00</span> <small>vs Dólar Oficial</small>
+    </div>
+  </div>
+
+  <div class="chart-wrapper">
+    <div class="chart-header" onclick="toggleChart()">
+      <span>📊 Variación Últimos 30D</span>
+      <svg class="chevron-icon" id="chartChevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"></polyline></svg>
+    </div>
+    <div id="chartContent" class="chart-content-grid collapsed">
+      <div class="chart-inner-area">
+        <div class="chart-tabs">
+            <button class="chart-tab active" id="tabBinChart" onclick="switchChartType('paralelo')">P2P (Paralelo)</button>
+            <button class="chart-tab" id="tabBcvChart" onclick="switchChartType('oficial')">Banco Oficial (BCV)</button>
+        </div>
+        <div class="chart-relative-container">
+            <div id="chartHud" class="chart-hud-layer"><span id="hudDate">...</span><span id="hudValue">0.00 Bs</span></div>
+            <canvas id="ultraHistoryCanvas" height="160"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 </div>
-
-<div id="chartModal" class="modal-overlay hidden">
-    <div class="modal-content">
-        <div class="modal-header" style="margin-bottom: 10px; padding-bottom: 5px;">
-            <h3>📈 HISTÓRICO</h3>
-            <button class="btn-close-modal" onclick="closeChartModal()">✖</button>
-        </div>
-        
-        <div class="chart-tabs">
-            <button id="tabChartParalelo" onclick="switchChartType('paralelo')" class="chart-tab active">BINANCE</button>
-            <button id="tabChartBcv" onclick="switchChartType('oficial')" class="chart-tab">BCV</button>
-        </div>
-
-        <div class="modal-body" style="height: 220px; position: relative; width: 100%;">
-            <canvas id="historyChart"></canvas>
-        </div>
-    </div>
-</div>
-
-<script src="script.js?v=6.0"></script>
+<script src="script.js"></script>
 </body>
 </html>
