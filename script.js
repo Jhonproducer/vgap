@@ -11,6 +11,9 @@ let historicalChartInstance = null;
 let currentChartType = 'paralelo'; 
 let rawHistoryData = { oficial: [], paralelo: [] };
 
+// UTILIDAD PARA FORMATO VENEZOLANO (1.234,56)
+const formatVE = (num) => new Intl.NumberFormat('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(num);
+
 window.startApp = (theme) => {
     document.body.setAttribute('data-theme', theme);
     getEl('themeToggleCheckbox').checked = theme === 'dark';
@@ -138,7 +141,7 @@ window.fetchBinanceOnly = async () => {
     } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBinance(), 1000); }
 };
 
-// --- GRÁFICOS Y RESTO DE FUNCIONES (INTACTAS) ---
+// --- GRÁFICOS Y RESTO DE FUNCIONES ---
 window.openChartModal = async () => {
     getEl('chartModal').classList.remove('hidden');
     if(rawHistoryData.paralelo.length === 0) {
@@ -188,7 +191,19 @@ function renderChartJs() {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: {display: false}, tooltip: { mode: 'index', intersect: false } },
+            plugins: { 
+                legend: {display: false}, 
+                tooltip: { 
+                    mode: 'index', 
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) { 
+                            // FORMATO VENEZOLANO EN EL GRÁFICO (Bs.S al inicio)
+                            return 'Bs.S ' + formatVE(context.parsed.y); 
+                        }
+                    }
+                } 
+            },
             scales: {
                 x: { ticks: {color: isDark ? '#8E8E93' : '#636366'} },
                 y: { grid: {color: isDark ? '#333335' : '#D1D1D6', borderDash: [5,5]}, ticks: {color: isDark ? '#8E8E93' : '#636366'} }
@@ -235,18 +250,18 @@ const sync = (origin) => {
 };
 
 const updateUI = () => {
-    const bcv = parseFloat(getEl('rateBcv').value) || 1;
-    const p2p = parseFloat(getEl('rateBinance').value) || 1;
-    const bs = parseFloat(getEl('inputBs').value) || 0;
+    const bcv = parseFloat(getEl('rateBcv').value) || 1, p2p = parseFloat(getEl('rateBinance').value) || 1, bs = parseFloat(getEl('inputBs').value) || 0;
     const usdtRaw = parseFloat(getEl('inputUsdt').value) || 0;
     
-    getEl('bigBsDisplay').innerText = new Intl.NumberFormat('de-DE', {minimumFractionDigits: 2}).format(bs) + " Bs";
+    // FORMATO VENEZOLANO EN LA PANTALLA PRINCIPAL (Bs.S al inicio)
+    getEl('bigBsDisplay').innerText = "Bs.S " + formatVE(bs);
+    
     const power = bs > 0 ? (bs / bcv) : 0;
-    getEl('powerUsd').innerText = power.toFixed(2);
-    getEl('brechaBadge').innerText = (((p2p - bcv)/bcv)*100).toFixed(2) + "%";
-    getEl('factorBadge').innerText = (p2p/bcv).toFixed(2) + "x";
+    getEl('powerUsd').innerText = formatVE(power);
+    getEl('brechaBadge').innerText = formatVE(((p2p - bcv)/bcv)*100) + "%";
+    getEl('factorBadge').innerText = formatVE(p2p/bcv) + "x";
 
-    // AÑADIDO: CÁLCULO GANANCIA EXTRA
+    // CÁLCULO GANANCIA EXTRA
     const usdtNeto = usdtRaw > 0.06 ? usdtRaw - 0.06 : 0;
     const profitArea = getEl('profitArea');
     const extraEl = getEl('extraProfit');
@@ -254,7 +269,7 @@ const updateUI = () => {
     if (bs > 0 && usdtNeto > 0 && power > usdtNeto) {
         const extra = power - usdtNeto;
         if(extraEl && profitArea) {
-            extraEl.innerText = "+$" + extra.toFixed(2);
+            extraEl.innerText = "+$" + formatVE(extra);
             profitArea.style.display = 'inline-block';
         }
     } else {
@@ -263,7 +278,8 @@ const updateUI = () => {
 };
 
 window.copyToClipboard = async () => {
-    const txt = getEl('bigBsDisplay').innerText.split(' ')[0].replace(/[^\d,]/g, '').replace(',', '.');
+    // Al copiar, remueve el "Bs.S " para dejar solo el número limpio con formato venezolano
+    const txt = getEl('bigBsDisplay').innerText.replace('Bs.S ', '');
     await navigator.clipboard.writeText(txt);
     const btn = document.querySelector('.btn-copy-elegant');
     btn.innerText = "¡COPIADO!";
