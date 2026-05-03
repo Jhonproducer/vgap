@@ -79,7 +79,8 @@
         </label>
         <div id="badgeBcv" class="mode-badge api-bcv" onclick="toggleBcv()">AUTO</div>
       </div>
-      <input type="number" id="rateBcv" inputmode="decimal" step="0.01" disabled>
+      <!-- CAMBIO: type="text" inputmode="numeric" para soportar el formateo estilo banco -->
+      <input type="text" id="rateBcv" inputmode="numeric" disabled>
     </div>
 
     <div class="input-field" id="binanceContainer">
@@ -92,17 +93,17 @@
         </label>
         <div id="badgeBinance" class="mode-badge api-binance" onclick="toggleBinance()">AUTO</div>
       </div>
-      <input type="number" id="rateBinance" inputmode="decimal" step="0.01" disabled>
+      <input type="text" id="rateBinance" inputmode="numeric" disabled>
     </div>
 
     <div class="input-field">
       <label class="tooltip">$ BCV ⓘ <span class="tooltiptext">Dólares a tasa oficial.</span></label>
-      <input type="number" id="inputUsd" inputmode="decimal" placeholder="0.00">
+      <input type="text" id="inputUsd" inputmode="numeric" placeholder="0,00">
     </div>
     
     <div class="input-field highlight-border">
       <label class="tooltip">USDT ⓘ <span class="tooltiptext">Cripto dólares (Inc. comisión 0.06).</span></label>
-      <input type="number" id="inputUsdt" inputmode="decimal" placeholder="0.00">
+      <input type="text" id="inputUsdt" inputmode="numeric" placeholder="0,00">
     </div>
 
     <div class="input-field full-width">
@@ -112,7 +113,7 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
         </button>
       </div>
-      <input type="number" id="inputBs" inputmode="decimal" placeholder="0.00">
+      <input type="text" id="inputBs" inputmode="numeric" placeholder="0,00">
     </div>
   </div>
 
@@ -120,15 +121,15 @@
 
   <div class="result-card">
     <p class="card-title" style="margin-bottom:2px; font-weight:800; font-size:11px; color:var(--text-dim);">RECIBES NETO</p>
-    <h2 id="bigBsDisplay">0,00 Bs</h2>
+    <h2 id="bigBsDisplay">Bs.S 0,00</h2>
     <button class="btn-copy-elegant" onclick="copyToClipboard()">
       <span>COPIAR MONTO</span>
     </button>
     <div class="vender-info">
-      Poder de compra: <strong id="powerUsd">0.00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
+      Poder de compra: <strong id="powerUsd">0,00</strong> <span class="usd-label tooltip">$ BCV ⓘ <span class="tooltiptext">Valor real de tus Bs a tasa oficial.</span></span>
     </div>
     <div id="profitArea" class="profit-badge" style="display:none; margin-top: 8px;">
-        Ganancia: <span id="extraProfit" style="color:var(--green); font-weight:800;">+$0.00</span> <small style="font-size:9px; color:var(--text-dim);">vs Oficial</small>
+        Ganancia: <span id="extraProfit" style="color:var(--green); font-weight:800;">+$0,00</span> <small style="font-size:9px; color:var(--text-dim);">vs Oficial</small>
     </div>
   </div>
 </div>
