@@ -3,6 +3,7 @@ const getEl = (id) => document.getElementById(id);
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
+// Pilas de memoria para recordar tasas anteriores
 let binanceMemoryStack = JSON.parse(localStorage.getItem('vgap_binance_stack')) || ["613.54"];
 let bcvMemoryStack = JSON.parse(localStorage.getItem('vgap_bcv_stack')) || ["421.87"];
 
@@ -13,11 +14,11 @@ let rawHistoryData = { oficial: [], paralelo: [] };
 // --- UTILIDADES DE FORMATO ESTILO VENEZUELA ---
 const formatVE = (num) => new Intl.NumberFormat('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(num);
 
-// ESTA FUNCIÓN CONVIERTE "1.234,56" de vuelta al número matemático 1234.56 para que el sistema pueda multiplicar
+// Convierte el texto "1.234,56" en número matemático (1234.56)
 const getRawNumber = (formattedString) => {
     if (!formattedString) return 0;
-    const digits = String(formattedString).replace(/\D/g, ''); // Quita todo menos los números
-    return digits ? parseInt(digits, 10) / 100 : 0; // Divide entre 100 para crear los decimales automáticamente
+    const digits = String(formattedString).replace(/\D/g, ''); 
+    return digits ? parseInt(digits, 10) / 100 : 0; 
 };
 
 window.startApp = (theme) => {
@@ -99,7 +100,7 @@ window.fetchBcvOnly = async () => {
 
         if (bcvHist.length > 0) {
             const val = parseFloat(bcvHist[bcvHist.length - 1].promedio);
-            input.value = formatVE(val); // Aplicamos el formato al traer la API
+            input.value = formatVE(val);
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
                 bcvMemoryStack.push(val.toFixed(2));
@@ -124,7 +125,7 @@ window.fetchBinanceOnly = async () => {
         const binData = data.find(item => item.fuente === 'paralelo');
         if (binData && binData.promedio) {
             const val = parseFloat(binData.promedio);
-            input.value = formatVE(val); // Aplicamos el formato al traer la API
+            input.value = formatVE(val);
             
             if(val.toFixed(2) !== binanceMemoryStack[binanceMemoryStack.length-1]) {
                 binanceMemoryStack.push(val.toFixed(2));
@@ -208,7 +209,7 @@ function renderChartJs() {
     });
 }
 
-// --- ARRANQUE Y SISTEMA DE "AUTO-TECLEO ESTILO BANCO" ---
+// --- ARRANQUE Y MÁSCARA EN VIVO ---
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
     if (savedTheme) {
@@ -220,7 +221,7 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
 
-    // Aquí sucede la magia de la máscara de Banco de Venezuela
+    // Auto-formateo a medida que se teclea
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         const el = getEl(id);
         el.addEventListener('input', (e) => {
@@ -228,7 +229,6 @@ window.onload = () => {
                 sync(id.replace('input', '').toLowerCase());
                 return;
             }
-            // Extrae los números y le pone la máscara automática
             const rawMath = getRawNumber(e.target.value);
             e.target.value = formatVE(rawMath);
             
@@ -238,7 +238,6 @@ window.onload = () => {
 };
 
 const sync = (origin) => {
-    // Al hacer cálculos, necesitamos extraer los números "limpios" de la máscara que ve el usuario
     const bcv = getRawNumber(getEl('rateBcv').value) || 1;
     const p2p = getRawNumber(getEl('rateBinance').value) || 1;
     const com = 0.06;
