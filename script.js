@@ -15,36 +15,50 @@ window.startApp = (t) => {
 };
 
 window.toggleThemeSwitch = () => {
-    const isD = getEl('themeToggleCheckbox').checked; const t = isD ? 'dark' : 'light';
-    document.body.setAttribute('data-theme', t); document.querySelector('meta[name="theme-color"]').setAttribute('content', isD ? '#000000' : '#F2F2F7');
-    localStorage.setItem('vgap_theme_saved', t); if(historicalChartInstance) renderChartJs(); 
+    const t = getEl('themeToggleCheckbox').checked ? 'dark' : 'light';
+    document.body.setAttribute('data-theme', t); localStorage.setItem('vgap_theme_saved', t); if(historicalChartInstance) renderChartJs(); 
 };
 
 window.toggleBcv = async () => {
-    isBcvApi = !isBcvApi; const badge = getEl('badgeBcv'); const input = getEl('rateBcv');
-    if (isBcvApi) { badge.innerText = "..."; badge.className = "mode-badge api-bcv"; input.disabled = true; await fetchBcvOnly(); } 
-    else { badge.innerText = "MANUAL"; badge.className = "mode-badge manual-mode"; input.disabled = false; input.value = formatVE(parseFloat(bcvMemoryStack[bcvMemoryStack.length - 1])); sync('ratebcv'); input.focus(); }
+    isBcvApi = !isBcvApi; const b = getEl('badgeBcv'); const i = getEl('rateBcv');
+    if (isBcvApi) { b.innerText = "..."; b.className = "mode-badge api-bcv"; i.disabled = true; await fetchBcvOnly(); } 
+    else { b.innerText = "MANUAL"; b.className = "mode-badge manual-mode"; i.disabled = false; i.value = formatVE(parseFloat(bcvMemoryStack[bcvMemoryStack.length - 1])); sync('ratebcv'); i.focus(); }
 };
 
 window.toggleBinance = async () => {
-    isBinanceApi = !isBinanceApi; const badge = getEl('badgeBinance'); const input = getEl('rateBinance');
-    if (isBinanceApi) { badge.innerText = "..."; badge.className = "mode-badge api-binance"; input.disabled = true; await fetchBinanceOnly(); } 
-    else { badge.innerText = "MANUAL"; badge.className = "mode-badge manual-mode"; input.disabled = false; input.value = formatVE(parseFloat(binanceMemoryStack[binanceMemoryStack.length - 1])); sync('ratebinance'); input.focus(); }
+    isBinanceApi = !isBinanceApi; const b = getEl('badgeBinance'); const i = getEl('rateBinance');
+    if (isBinanceApi) { b.innerText = "..."; b.className = "mode-badge api-binance"; i.disabled = true; await fetchBinanceOnly(); } 
+    else { b.innerText = "MANUAL"; b.className = "mode-badge manual-mode"; i.disabled = false; i.value = formatVE(parseFloat(binanceMemoryStack[binanceMemoryStack.length - 1])); sync('ratebinance'); i.focus(); }
 };
 
+// --- MOTOR DE CAZA BCV (VERIFICACIÓN TRIPLE) ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv'); const input = getEl('rateBcv');
+    const t = Date.now(); let found = [];
+
     try {
-        // PETICIÓN A PYDOLARVENEZUELA (MONITOR BCV INSTANTÁNEO)
-        const r = await fetch('https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=bcv&t=' + Date.now());
-        const data = await r.json();
-        const price = data.monitors && data.monitors.usd ? parseFloat(String(data.monitors.usd.price).replace(',', '.')) : null;
-        if (price) {
-            input.value = formatVE(price);
-            if(price.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) { bcvMemoryStack.push(price.toFixed(2)); localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack)); }
+        // Intento 1: CriptoDolar (La que viste con 471+)
+        const p1 = fetch(`https://pydolarvenezuela-api.vercel.app/api/v1/dollar?page=criptodolar&t=${t}`).then(r => r.json()).then(d => {
+            for (let k in d.monitors) if (k.toLowerCase().includes('bcv')) return parseFloat(String(d.monitors[k].price).replace(',','.'));
+            return 0;
+        }).catch(() => 0);
+
+        // Intento 2: Histórico (Suele refrescar antes que la tasa simple)
+        const p2 = fetch(`https://ve.dolarapi.com/v1/historicos/dolares?t=${t}`).then(r => r.json()).then(d => {
+            const list = d.filter(k => k.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+            if(list.length > 0) { rawHistoryData.oficial = list.slice(-15); return parseFloat(list[list.length-1].promedio); }
+            return 0;
+        }).catch(() => 0);
+
+        const results = await Promise.all([p1, p2]);
+        const top = Math.max(...results.filter(v => v > 0));
+
+        if (top > 0) {
+            input.value = formatVE(top);
+            if(top.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) { bcvMemoryStack.push(top.toFixed(2)); localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack)); }
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
             badge.innerText = "AUTO"; sync('ratebcv');
-        }
+        } else { throw new Error(); }
     } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBcv(), 1000); }
 };
 
@@ -67,7 +81,6 @@ window.openChartModal = async () => {
         try {
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
             const d = await r.json();
-            rawHistoryData.oficial = d.filter(k => k.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).slice(-15);
             rawHistoryData.paralelo = d.filter(k => k.fuente === 'paralelo').sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).slice(-15);
         } catch(e) {}
     }
