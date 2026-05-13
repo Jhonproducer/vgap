@@ -101,21 +101,33 @@ window.fetchBcvOnly = async () => {
         const cachedTime = localStorage.getItem('vgap_bcv_time');
         const now = Date.now();
         
+        // Caché salvavidas de 15 minutos
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            // NUEVO PROVEEDOR: TCambio
-            const r = await fetch('https://tcambio.app');
-            if (!r.ok) throw new Error('Fallo al conectar con TCambio');
+            // PROBANDO: API gratuita de Rafnixg (https://bcv-api.rafnixg.dev)
+            const r = await fetch('https://bcv-api.rafnixg.dev/rates/');
+            if (!r.ok) throw new Error('Fallo al conectar con la API de rafnixg');
             data = await r.json();
             
             localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
             localStorage.setItem('vgap_bcv_time', now.toString());
         }
 
-        if (data && data.usd && data.usd.value) {
-            const val = parseFloat(data.usd.value);
-            input.value = formatVE(val); 
+        // Búsqueda inteligente del valor USD en el JSON
+        let tasaDolar = null;
+        if (data && data.rates && data.rates.USD) {
+            tasaDolar = data.rates.USD.value || data.rates.USD;
+        } else if (data && data.USD) {
+            tasaDolar = data.USD.value || data.USD;
+        } else if (Array.isArray(data)) {
+            const usdObj = data.find(item => item.currency === 'USD' || item.name === 'USD');
+            if (usdObj) tasaDolar = usdObj.value || usdObj.exchange;
+        }
+
+        if (tasaDolar) {
+            const val = parseFloat(tasaDolar);
+            input.value = formatVE(val); // Formato de moneda
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
                 bcvMemoryStack.push(val.toFixed(2));
@@ -123,19 +135,19 @@ window.fetchBcvOnly = async () => {
                 localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
             }
 
-            const fechaActualizacion = data.usd.last_update ? new Date(data.usd.last_update) : new Date();
             getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {
                 timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', 
                 hour: '2-digit', minute: '2-digit', hour12: true
-            }).format(fechaActualizacion)} VEN`;
+            }).format(new Date())} VEN`;
             
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
-            throw new Error('Estructura de datos no coincide');
+            console.log("JSON recibido:", data);
+            throw new Error('Estructura de datos no reconocida');
         }
     } catch (e) { 
-        console.error("Error cargando BCV desde TCambio:", e);
+        console.error("Error cargando BCV:", e);
         badge.innerText = "ERROR"; 
         setTimeout(() => window.toggleBcv(), 1000); 
     }
