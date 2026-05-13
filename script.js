@@ -1,5 +1,9 @@
 const getEl = (id) => document.getElementById(id);
 
+// --- CONFIGURACIÓN GLOBAL ---
+const CACHE_MINUTES = 15; // Tiempo de espera antes de volver a llamar a la API
+const USDT_FEE = 0.06;    // Comisión de Binance
+
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
@@ -13,11 +17,10 @@ let rawHistoryData = { oficial: [], paralelo: [] };
 // --- UTILIDADES DE FORMATO ESTILO VENEZUELA ---
 const formatVE = (num) => new Intl.NumberFormat('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(num);
 
-// ESTA FUNCIÓN CONVIERTE "1.234,56" de vuelta al número matemático 1234.56 para que el sistema pueda multiplicar
 const getRawNumber = (formattedString) => {
     if (!formattedString) return 0;
-    const digits = String(formattedString).replace(/\D/g, ''); // Quita todo menos los números
-    return digits ? parseInt(digits, 10) / 100 : 0; // Divide entre 100 para crear los decimales automáticamente
+    const digits = String(formattedString).replace(/\D/g, ''); 
+    return digits ? parseInt(digits, 10) / 100 : 0; 
 };
 
 window.startApp = (theme) => {
@@ -93,13 +96,26 @@ window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
-        const data = await r.json();
-        const bcvHist = data.filter(d => d.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+        let data;
+        const cachedData = localStorage.getItem('vgap_bcv_data');
+        const cachedTime = localStorage.getItem('vgap_bcv_time');
+        const now = Date.now();
+        
+        if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
+            data = JSON.parse(cachedData);
+        } else {
+            // NUEVO PROVEEDOR: TCambio
+            const r = await fetch('https://tcambio.app');
+            if (!r.ok) throw new Error('Fallo al conectar con TCambio');
+            data = await r.json();
+            
+            localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
+            localStorage.setItem('vgap_bcv_time', now.toString());
+        }
 
-        if (bcvHist.length > 0) {
-            const val = parseFloat(bcvHist[bcvHist.length - 1].promedio);
-            input.value = formatVE(val); // Aplicamos el formato al traer la API
+        if (data && data.usd && data.usd.value) {
+            const val = parseFloat(data.usd.value);
+            input.value = formatVE(val); 
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
                 bcvMemoryStack.push(val.toFixed(2));
@@ -107,24 +123,46 @@ window.fetchBcvOnly = async () => {
                 localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
             }
 
-            rawHistoryData.oficial = bcvHist.slice(-15);
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
+            const fechaActualizacion = data.usd.last_update ? new Date(data.usd.last_update) : new Date();
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {
+                timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', 
+                hour: '2-digit', minute: '2-digit', hour12: true
+            }).format(fechaActualizacion)} VEN`;
+            
             badge.innerText = "AUTO";
             sync('ratebcv');
+        } else {
+            throw new Error('Estructura de datos no coincide');
         }
-    } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBcv(), 1000); }
+    } catch (e) { 
+        console.error("Error cargando BCV desde TCambio:", e);
+        badge.innerText = "ERROR"; 
+        setTimeout(() => window.toggleBcv(), 1000); 
+    }
 };
 
 window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
     try {
-        const r = await fetch('https://ve.dolarapi.com/v1/dolares?t=' + Date.now());
-        const data = await r.json();
+        let data;
+        const cachedData = localStorage.getItem('vgap_binance_data');
+        const cachedTime = localStorage.getItem('vgap_binance_time');
+        const now = Date.now();
+        
+        if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
+            data = JSON.parse(cachedData);
+        } else {
+            const r = await fetch('https://ve.dolarapi.com/v1/dolares');
+            data = await r.json();
+            localStorage.setItem('vgap_binance_data', JSON.stringify(data));
+            localStorage.setItem('vgap_binance_time', now.toString());
+        }
+
         const binData = data.find(item => item.fuente === 'paralelo');
         if (binData && binData.promedio) {
             const val = parseFloat(binData.promedio);
-            input.value = formatVE(val); // Aplicamos el formato al traer la API
+            input.value = formatVE(val); 
             
             if(val.toFixed(2) !== binanceMemoryStack[binanceMemoryStack.length-1]) {
                 binanceMemoryStack.push(val.toFixed(2));
@@ -143,7 +181,7 @@ window.openChartModal = async () => {
     getEl('chartModal').classList.remove('hidden');
     if(rawHistoryData.paralelo.length === 0) {
         try {
-            const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares?t=' + Date.now());
+            const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares');
             const data = await r.json();
             rawHistoryData.paralelo = data.filter(d => d.fuente === 'paralelo').sort((a,b) => new Date(a.fecha) - new Date(b.fecha)).slice(-15);
             if(rawHistoryData.oficial.length === 0) {
@@ -220,7 +258,6 @@ window.onload = () => {
     fetchBcvOnly();
     fetchBinanceOnly(); 
 
-    // Aquí sucede la magia de la máscara de Banco de Venezuela
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         const el = getEl(id);
         el.addEventListener('input', (e) => {
@@ -228,7 +265,6 @@ window.onload = () => {
                 sync(id.replace('input', '').toLowerCase());
                 return;
             }
-            // Extrae los números y le pone la máscara automática
             const rawMath = getRawNumber(e.target.value);
             e.target.value = formatVE(rawMath);
             
@@ -238,10 +274,9 @@ window.onload = () => {
 };
 
 const sync = (origin) => {
-    // Al hacer cálculos, necesitamos extraer los números "limpios" de la máscara que ve el usuario
     const bcv = getRawNumber(getEl('rateBcv').value) || 1;
     const p2p = getRawNumber(getEl('rateBinance').value) || 1;
-    const com = 0.06;
+    const com = USDT_FEE;
     const usd = getEl('inputUsd'), usdt = getEl('inputUsdt'), bs = getEl('inputBs');
     
     if (origin === 'usd' || origin === 'ratebcv') {
@@ -283,7 +318,7 @@ const updateUI = () => {
     getEl('brechaBadge').innerText = formatVE(((p2p - bcv)/bcv)*100) + "%";
     getEl('factorBadge').innerText = formatVE(p2p/bcv) + "x";
 
-    const usdtNeto = usdtRaw > 0.06 ? usdtRaw - 0.06 : 0;
+    const usdtNeto = usdtRaw > USDT_FEE ? usdtRaw - USDT_FEE : 0;
     const profitArea = getEl('profitArea');
     const extraEl = getEl('extraProfit');
     
