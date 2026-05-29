@@ -107,7 +107,7 @@ window.fetchBcvOnly = async () => {
             // API DolarVzla con su Key en la cabecera
             const r = await fetch('https://api.dolarvzla.com/v1/bcv', {
                 headers: {
-                    'x-dolarvzla-key': 'da84c60499b292da8ee5bf607eaa99186ec269e1e009530976',
+                    'x-dolarvzla-key': 'da84c60499b292da8ee5bf607eaa99186ec269e1e009530976de87e703d08ac5',
                     'Accept': 'application/json'
                 }
             });
