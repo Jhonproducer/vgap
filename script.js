@@ -104,14 +104,14 @@ window.fetchBcvOnly = async () => {
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            // Nueva API estática de DolarVzla (Sin API Key, CORS abierto según la imagen)
-            let r = await fetch('https://rates.dolarvzla.com');
-            if (!r.ok) {
-                // Fallback por si la ruta exacta es /bcv
-                r = await fetch('https://rates.dolarvzla.com/bcv');
-            }
+            // AQUÍ ESTÁ LA MAGIA: API principal de DolarVzla con tu Key completa y corregida
+            const r = await fetch('https://api.dolarvzla.com/v1/bcv', {
+                headers: {
+                    'x-dolarvzla-key': 'da84c60499b292da8ee5bf607eaa99186ec269e1e009530976de87e703d08ac5',
+                    'Accept': 'application/json'
+                }
+            });
             if (!r.ok) throw new Error('Fallo la API de dolarvzla');
-            
             data = await r.json();
             
             localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
@@ -121,6 +121,7 @@ window.fetchBcvOnly = async () => {
         let tasaDolar = null;
         let fechaActualizacion = null;
 
+        // Búsqueda inteligente del valor dependiendo de cómo devuelva la estructura
         if (data && data.price) {
             tasaDolar = data.price;
             fechaActualizacion = data.last_update || data.updated_at;
