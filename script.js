@@ -92,7 +92,6 @@ window.toggleBinance = async () => {
     }
 };
 
-// --- LA VIEJA CONFIABLE: DOLARAPI ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
@@ -105,16 +104,38 @@ window.fetchBcvOnly = async () => {
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares');
+            // EL LINK MÁGICO QUE ENCONTRASTE: Archivo estático directo, sin llave, CORS abierto
+            const r = await fetch('https://rates.dolarvzla.com/bcv/current.json');
+            if (!r.ok) throw new Error('Fallo la conexión al JSON estático');
             data = await r.json();
+            
             localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
             localStorage.setItem('vgap_bcv_time', now.toString());
         }
 
-        const bcvHist = data.filter(d => d.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
+        let tasaDolar = null;
+        let fechaActualizacion = null;
 
-        if (bcvHist.length > 0) {
-            const val = parseFloat(bcvHist[bcvHist.length - 1].promedio);
+        // Extraemos la información del JSON
+        if (data && data.price) {
+            tasaDolar = data.price;
+            fechaActualizacion = data.last_update || data.updated_at;
+        } else if (data && data.bcv) {
+            tasaDolar = data.bcv.price || data.bcv.value;
+            fechaActualizacion = data.bcv.last_update;
+        } else if (data && data.monitors && data.monitors.bcv) {
+            tasaDolar = data.monitors.bcv.price;
+            fechaActualizacion = data.monitors.bcv.last_update;
+        } else if (data && data.monitors && data.monitors.usd) {
+            tasaDolar = data.monitors.usd.price;
+            fechaActualizacion = data.monitors.usd.last_update;
+        } else if (data && data.dolar) { // Por si acaso la llave principal es "dolar"
+            tasaDolar = data.dolar.price || data.dolar.valor;
+            fechaActualizacion = data.dolar.last_update;
+        }
+
+        if (tasaDolar) {
+            const val = parseFloat(tasaDolar);
             input.value = formatVE(val); 
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
@@ -123,8 +144,7 @@ window.fetchBcvOnly = async () => {
                 localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
             }
 
-            rawHistoryData.oficial = bcvHist.slice(-15);
-            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
+            getEl('lastUpdate').innerText = `Actualizado: ${fechaActualizacion || new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
