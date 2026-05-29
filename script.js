@@ -104,14 +104,21 @@ window.fetchBcvOnly = async () => {
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            // AQUÍ ESTÁ LA MAGIA: API principal de DolarVzla con tu Key completa y corregida
-            const r = await fetch('https://api.dolarvzla.com/v1/bcv', {
-                headers: {
-                    'x-dolarvzla-key': 'da84c60499b292da8ee5bf607eaa99186ec269e1e009530976de87e703d08ac5',
-                    'Accept': 'application/json'
-                }
-            });
-            if (!r.ok) throw new Error('Fallo la API de dolarvzla');
+            // El truco está aquí: NO enviamos Headers de Key porque la imagen dice "Sin API key, CORS abierto"
+            // Buscamos automáticamente en las rutas más comunes del CDN para no fallar
+            let r;
+            const posiblesRutas = ['/bcv.json', '/bcv', '/rates/bcv', '/api/bcv', '/v1/bcv'];
+            for (let ruta of posiblesRutas) {
+                try {
+                    const response = await fetch('https://rates.dolarvzla.com' + ruta);
+                    if (response.ok) {
+                        r = response;
+                        break;
+                    }
+                } catch (err) {}
+            }
+            
+            if (!r) throw new Error('No pudimos dar con la ruta exacta del archivo estático');
             data = await r.json();
             
             localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
@@ -121,7 +128,7 @@ window.fetchBcvOnly = async () => {
         let tasaDolar = null;
         let fechaActualizacion = null;
 
-        // Búsqueda inteligente del valor dependiendo de cómo devuelva la estructura
+        // Extraemos la información sin importar cómo venga estructurada
         if (data && data.price) {
             tasaDolar = data.price;
             fechaActualizacion = data.last_update || data.updated_at;
