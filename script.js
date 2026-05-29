@@ -92,6 +92,7 @@ window.toggleBinance = async () => {
     }
 };
 
+// --- LA VIEJA CONFIABLE: DOLARAPI ---
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
@@ -104,47 +105,16 @@ window.fetchBcvOnly = async () => {
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            // El truco está aquí: NO enviamos Headers de Key porque la imagen dice "Sin API key, CORS abierto"
-            // Buscamos automáticamente en las rutas más comunes del CDN para no fallar
-            let r;
-            const posiblesRutas = ['/bcv.json', '/bcv', '/rates/bcv', '/api/bcv', '/v1/bcv'];
-            for (let ruta of posiblesRutas) {
-                try {
-                    const response = await fetch('https://rates.dolarvzla.com' + ruta);
-                    if (response.ok) {
-                        r = response;
-                        break;
-                    }
-                } catch (err) {}
-            }
-            
-            if (!r) throw new Error('No pudimos dar con la ruta exacta del archivo estático');
+            const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares');
             data = await r.json();
-            
             localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
             localStorage.setItem('vgap_bcv_time', now.toString());
         }
 
-        let tasaDolar = null;
-        let fechaActualizacion = null;
+        const bcvHist = data.filter(d => d.fuente === 'oficial').sort((a,b) => new Date(a.fecha) - new Date(b.fecha));
 
-        // Extraemos la información sin importar cómo venga estructurada
-        if (data && data.price) {
-            tasaDolar = data.price;
-            fechaActualizacion = data.last_update || data.updated_at;
-        } else if (data && data.monitors && data.monitors.bcv) {
-            tasaDolar = data.monitors.bcv.price;
-            fechaActualizacion = data.monitors.bcv.last_update;
-        } else if (data && data.bcv) {
-            tasaDolar = data.bcv.price || data.bcv.value;
-            fechaActualizacion = data.bcv.last_update;
-        } else if (data && data.monitors && data.monitors.usd) {
-            tasaDolar = data.monitors.usd.price;
-            fechaActualizacion = data.monitors.usd.last_update;
-        }
-
-        if (tasaDolar) {
-            const val = parseFloat(tasaDolar);
+        if (bcvHist.length > 0) {
+            const val = parseFloat(bcvHist[bcvHist.length - 1].promedio);
             input.value = formatVE(val); 
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
@@ -153,7 +123,8 @@ window.fetchBcvOnly = async () => {
                 localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
             }
 
-            getEl('lastUpdate').innerText = `Actualizado: ${fechaActualizacion || new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
+            rawHistoryData.oficial = bcvHist.slice(-15);
+            getEl('lastUpdate').innerText = `Actualizado: ${new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: true}).format(new Date())} VEN`;
             badge.innerText = "AUTO";
             sync('ratebcv');
         } else {
