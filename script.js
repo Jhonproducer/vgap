@@ -7,6 +7,10 @@ const USDT_FEE = 0.06;    // Comisión de Binance
 let isBcvApi = true; 
 let isBinanceApi = true; 
 
+// Variables para cálculos matemáticos exactos (Sin redondear)
+window.exactBcvRate = 0;
+window.exactBinanceRate = 0;
+
 let binanceMemoryStack = JSON.parse(localStorage.getItem('vgap_binance_stack')) || ["613.54"];
 let bcvMemoryStack = JSON.parse(localStorage.getItem('vgap_bcv_stack')) || ["421.87"];
 
@@ -104,7 +108,6 @@ window.fetchBcvOnly = async () => {
         if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
             data = JSON.parse(cachedData);
         } else {
-            // Conexión directa a tu link magistral
             const r = await fetch('https://rates.dolarvzla.com/bcv/current.json');
             if (!r.ok) throw new Error('Fallo la conexión al JSON estático');
             data = await r.json();
@@ -116,15 +119,19 @@ window.fetchBcvOnly = async () => {
         let tasaDolar = null;
         let fechaActualizacion = null;
 
-        // LA SOLUCIÓN DEL INGENIERO: Leer la estructura EXACTA del JSON que pasaste
         if (data && data.current && data.current.usd) {
-            tasaDolar = data.current.usd; // Extrae 549.3716
-            fechaActualizacion = data.current.date; // Extrae "2026-05-29"
+            tasaDolar = data.current.usd; 
+            fechaActualizacion = data.current.date; 
         }
 
         if (tasaDolar) {
             const val = parseFloat(tasaDolar);
-            input.value = formatVE(val); // Esto automáticamente lo corta a 549,37
+            
+            // MAGIA FINANCIERA: Guardamos el valor exacto con 4 o más decimales por detrás
+            window.exactBcvRate = val;
+            
+            // Visualmente seguimos mostrando 2 decimales para que se vea limpio
+            input.value = formatVE(val); 
             
             if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
                 bcvMemoryStack.push(val.toFixed(2));
@@ -166,6 +173,10 @@ window.fetchBinanceOnly = async () => {
         const binData = data.find(item => item.fuente === 'paralelo');
         if (binData && binData.promedio) {
             const val = parseFloat(binData.promedio);
+            
+            // MAGIA FINANCIERA: Guardamos el valor exacto de Binance por detrás
+            window.exactBinanceRate = val;
+            
             input.value = formatVE(val); 
             
             if(val.toFixed(2) !== binanceMemoryStack[binanceMemoryStack.length-1]) {
@@ -278,8 +289,10 @@ window.onload = () => {
 };
 
 const sync = (origin) => {
-    const bcv = getRawNumber(getEl('rateBcv').value) || 1;
-    const p2p = getRawNumber(getEl('rateBinance').value) || 1;
+    // Si estamos en AUTO usamos el número exacto, si estamos en MANUAL usamos lo que el usuario escribió
+    const bcv = (isBcvApi && window.exactBcvRate > 0) ? window.exactBcvRate : (getRawNumber(getEl('rateBcv').value) || 1);
+    const p2p = (isBinanceApi && window.exactBinanceRate > 0) ? window.exactBinanceRate : (getRawNumber(getEl('rateBinance').value) || 1);
+    
     const com = USDT_FEE;
     const usd = getEl('inputUsd'), usdt = getEl('inputUsdt'), bs = getEl('inputBs');
     
@@ -310,8 +323,9 @@ const sync = (origin) => {
 };
 
 const updateUI = () => {
-    const bcv = getRawNumber(getEl('rateBcv').value) || 1;
-    const p2p = getRawNumber(getEl('rateBinance').value) || 1;
+    const bcv = (isBcvApi && window.exactBcvRate > 0) ? window.exactBcvRate : (getRawNumber(getEl('rateBcv').value) || 1);
+    const p2p = (isBinanceApi && window.exactBinanceRate > 0) ? window.exactBinanceRate : (getRawNumber(getEl('rateBinance').value) || 1);
+    
     const bs = getRawNumber(getEl('inputBs').value) || 0;
     const usdtRaw = getRawNumber(getEl('inputUsdt').value) || 0;
     
