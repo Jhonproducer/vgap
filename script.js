@@ -19,7 +19,18 @@ let currentChartType = 'paralelo';
 let rawHistoryData = { oficial: [], paralelo: [] };
 
 // --- UTILIDADES DE FORMATO ESTILO VENEZUELA ---
-const formatVE = (num) => new Intl.NumberFormat('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(num);
+// Redondeo comercial preciso (si el 3er decimal es >=5, sube), evitando el bug
+// clásico de coma flotante (ej: 1.005 -> 1.00 en vez de 1.01). Se añade un
+// épsilon minúsculo (muy por debajo de cualquier centavo real) para corregir
+// el error de representación binaria antes de redondear.
+const roundVE = (num) => {
+    if (!isFinite(num)) return 0;
+    const sign = num < 0 ? -1 : 1;
+    const abs = Math.abs(num);
+    return sign * Math.round((abs + 1e-9) * 100) / 100;
+};
+
+const formatVE = (num) => new Intl.NumberFormat('es-VE', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(roundVE(num));
 
 const getRawNumber = (formattedString) => {
     if (!formattedString) return 0;
@@ -96,59 +107,70 @@ window.toggleBinance = async () => {
     }
 };
 
+// Núcleo común de "pedir tasa, cachear, guardar en el stack y refrescar UI"
+// usado por BCV y Binance. Cada uno solo aporta su URL, sus llaves de caché
+// y cómo extraer el valor/fecha de su respuesta particular.
+async function _fetchRateCore({ cacheDataKey, cacheTimeKey, url, extract, badge, input, syncOrigin, memoryStack, memoryStackKey, onDate }) {
+    let data;
+    const cachedData = localStorage.getItem(cacheDataKey);
+    const cachedTime = localStorage.getItem(cacheTimeKey);
+    const now = Date.now();
+
+    if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
+        data = JSON.parse(cachedData);
+    } else {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('Fallo la conexión: ' + url);
+        data = await r.json();
+        localStorage.setItem(cacheDataKey, JSON.stringify(data));
+        localStorage.setItem(cacheTimeKey, now.toString());
+    }
+
+    const { value, date } = extract(data);
+    if (!value) throw new Error('Estructura de datos no reconocida');
+
+    const val = parseFloat(value);
+
+    // Redondeo comercial preciso antes de comparar/guardar (ver roundVE arriba)
+    const rounded = roundVE(val).toFixed(2);
+    if (rounded !== memoryStack[memoryStack.length - 1]) {
+        memoryStack.push(rounded);
+        if (memoryStack.length > 10) memoryStack.shift();
+        localStorage.setItem(memoryStackKey, JSON.stringify(memoryStack));
+    }
+
+    return { val, date };
+}
+
 window.fetchBcvOnly = async () => {
     const badge = getEl('badgeBcv');
     const input = getEl('rateBcv');
     try {
-        let data;
-        const cachedData = localStorage.getItem('vgap_bcv_data');
-        const cachedTime = localStorage.getItem('vgap_bcv_time');
-        const now = Date.now();
-        
-        if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
-            data = JSON.parse(cachedData);
-        } else {
-            const r = await fetch('https://rates.dolarvzla.com/bcv/current.json');
-            if (!r.ok) throw new Error('Fallo la conexión al JSON estático');
-            data = await r.json();
-            
-            localStorage.setItem('vgap_bcv_data', JSON.stringify(data));
-            localStorage.setItem('vgap_bcv_time', now.toString());
-        }
+        const { val, date } = await _fetchRateCore({
+            cacheDataKey: 'vgap_bcv_data',
+            cacheTimeKey: 'vgap_bcv_time',
+            url: 'https://rates.dolarvzla.com/bcv/current.json',
+            extract: (data) => ({
+                value: data?.current?.usd ?? null,
+                date: data?.current?.date ?? null
+            }),
+            memoryStack: bcvMemoryStack,
+            memoryStackKey: 'vgap_bcv_stack'
+        });
 
-        let tasaDolar = null;
-        let fechaActualizacion = null;
+        // MAGIA FINANCIERA: Guardamos el valor exacto con 4 o más decimales por detrás
+        window.exactBcvRate = val;
 
-        if (data && data.current && data.current.usd) {
-            tasaDolar = data.current.usd; 
-            fechaActualizacion = data.current.date; 
-        }
+        // Visualmente seguimos mostrando 2 decimales para que se vea limpio
+        input.value = formatVE(val);
 
-        if (tasaDolar) {
-            const val = parseFloat(tasaDolar);
-            
-            // MAGIA FINANCIERA: Guardamos el valor exacto con 4 o más decimales por detrás
-            window.exactBcvRate = val;
-            
-            // Visualmente seguimos mostrando 2 decimales para que se vea limpio
-            input.value = formatVE(val); 
-            
-            if(val.toFixed(2) !== bcvMemoryStack[bcvMemoryStack.length-1]) {
-                bcvMemoryStack.push(val.toFixed(2));
-                if(bcvMemoryStack.length > 10) bcvMemoryStack.shift();
-                localStorage.setItem('vgap_bcv_stack', JSON.stringify(bcvMemoryStack));
-            }
-
-            getEl('lastUpdate').innerText = `Actualizado: ${fechaActualizacion || new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit'}).format(new Date())} VEN`;
-            badge.innerText = "AUTO";
-            sync('ratebcv');
-        } else {
-            throw new Error('Estructura de datos no reconocida');
-        }
-    } catch (e) { 
+        getEl('lastUpdate').innerText = `Actualizado: ${date || new Intl.DateTimeFormat('es-VE', {timeZone: 'America/Caracas', day: '2-digit', month: '2-digit', year: '2-digit'}).format(new Date())} VEN`;
+        badge.innerText = "AUTO";
+        sync('ratebcv');
+    } catch (e) {
         console.error("Error cargando BCV:", e);
-        badge.innerText = "ERROR"; 
-        setTimeout(() => window.toggleBcv(), 1000); 
+        badge.innerText = "ERROR";
+        setTimeout(() => window.toggleBcv(), 1000);
     }
 };
 
@@ -156,44 +178,56 @@ window.fetchBinanceOnly = async () => {
     const badge = getEl('badgeBinance');
     const input = getEl('rateBinance');
     try {
-        let data;
-        const cachedData = localStorage.getItem('vgap_binance_data');
-        const cachedTime = localStorage.getItem('vgap_binance_time');
-        const now = Date.now();
-        
-        if (cachedData && cachedTime && (now - parseInt(cachedTime) < CACHE_MINUTES * 60 * 1000)) {
-            data = JSON.parse(cachedData);
-        } else {
-            const r = await fetch('https://ve.dolarapi.com/v1/dolares');
-            data = await r.json();
-            localStorage.setItem('vgap_binance_data', JSON.stringify(data));
-            localStorage.setItem('vgap_binance_time', now.toString());
-        }
+        const { val } = await _fetchRateCore({
+            cacheDataKey: 'vgap_binance_data',
+            cacheTimeKey: 'vgap_binance_time',
+            url: 'https://ve.dolarapi.com/v1/dolares',
+            extract: (data) => {
+                const binData = Array.isArray(data) ? data.find(item => item.fuente === 'paralelo') : null;
+                return { value: binData?.promedio ?? null, date: null };
+            },
+            memoryStack: binanceMemoryStack,
+            memoryStackKey: 'vgap_binance_stack'
+        });
 
-        const binData = data.find(item => item.fuente === 'paralelo');
-        if (binData && binData.promedio) {
-            const val = parseFloat(binData.promedio);
-            
-            // MAGIA FINANCIERA: Guardamos el valor exacto de Binance por detrás
-            window.exactBinanceRate = val;
-            
-            input.value = formatVE(val); 
-            
-            if(val.toFixed(2) !== binanceMemoryStack[binanceMemoryStack.length-1]) {
-                binanceMemoryStack.push(val.toFixed(2));
-                if(binanceMemoryStack.length > 10) binanceMemoryStack.shift();
-                localStorage.setItem('vgap_binance_stack', JSON.stringify(binanceMemoryStack));
-            }
-            
-            badge.innerText = "AUTO";
-            sync('ratebinance');
-        }
-    } catch (e) { badge.innerText = "ERROR"; setTimeout(() => window.toggleBinance(), 1000); }
+        // MAGIA FINANCIERA: Guardamos el valor exacto de Binance por detrás
+        window.exactBinanceRate = val;
+
+        input.value = formatVE(val);
+        badge.innerText = "AUTO";
+        sync('ratebinance');
+    } catch (e) {
+        console.error("Error cargando Binance:", e);
+        badge.innerText = "ERROR";
+        setTimeout(() => window.toggleBinance(), 1000);
+    }
 };
 
 // --- GRÁFICOS ---
+// Chart.js (CDN) solo se descarga la primera vez que el usuario abre el
+// histórico, en vez de siempre al cargar la app (ahorra datos y arranque más rápido).
+let chartJsLoadingPromise = null;
+const ensureChartJsLoaded = () => {
+    if (window.Chart) return Promise.resolve();
+    if (chartJsLoadingPromise) return chartJsLoadingPromise;
+    chartJsLoadingPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+    return chartJsLoadingPromise;
+};
+
 window.openChartModal = async () => {
     getEl('chartModal').classList.remove('hidden');
+    try {
+        await ensureChartJsLoaded();
+    } catch (e) {
+        console.error('No se pudo cargar Chart.js:', e);
+        return;
+    }
     if(rawHistoryData.paralelo.length === 0) {
         try {
             const r = await fetch('https://ve.dolarapi.com/v1/historicos/dolares');
@@ -261,6 +295,16 @@ function renderChartJs() {
     });
 }
 
+// --- REFRESCO AUTOMÁTICO EN TIEMPO REAL ---
+// La tasa BCV suele actualizarse en la tarde; si la pestaña queda abierta,
+// antes solo se pedía una vez al cargar y se quedaba pegada a esa tasa todo
+// el día. Ahora se revisa periódicamente y también al volver a la pestaña,
+// para reflejar el cambio apenas la fuente lo publique, sin recargar la página.
+const refreshRatesIfAuto = () => {
+    if (isBcvApi) fetchBcvOnly();
+    if (isBinanceApi) fetchBinanceOnly();
+};
+
 // --- ARRANQUE Y SISTEMA DE "AUTO-TECLEO ESTILO BANCO" ---
 window.onload = () => {
     const savedTheme = localStorage.getItem('vgap_theme_saved');
@@ -272,6 +316,16 @@ window.onload = () => {
     }
     fetchBcvOnly();
     fetchBinanceOnly(); 
+
+    // Revisa cada CACHE_MINUTES si ya hay tasa nueva (fetchBcvOnly/fetchBinanceOnly
+    // solo pegan a la API si el caché venció, así que esto es barato de sobra).
+    setInterval(refreshRatesIfAuto, CACHE_MINUTES * 60 * 1000);
+
+    // Si el usuario minimiza o cambia de pestaña y vuelve más tarde (ej. volvió
+    // en la tarde cuando el BCV ya publicó su nueva tasa), refresca al instante.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refreshRatesIfAuto();
+    });
 
     ['inputUsd', 'inputUsdt', 'inputBs', 'rateBcv', 'rateBinance'].forEach(id => {
         const el = getEl(id);
@@ -293,6 +347,10 @@ const sync = (origin) => {
     const bcv = (isBcvApi && window.exactBcvRate > 0) ? window.exactBcvRate : (getRawNumber(getEl('rateBcv').value) || 1);
     const p2p = (isBinanceApi && window.exactBinanceRate > 0) ? window.exactBinanceRate : (getRawNumber(getEl('rateBinance').value) || 1);
     
+    // USDT_FEE (0.06, monto FIJO en USDT) es la comisión que Binance P2P cobra
+    // al vender USDT por Bs. SOLO se aplica en la conversión USDT<->Bs.
+    // La conversión USD/BCV<->Bs (líneas de abajo con "bcv") NUNCA lleva este fee:
+    // ese es tu monto oficial puro, sin descuentos de P2P.
     const com = USDT_FEE;
     const usd = getEl('inputUsd'), usdt = getEl('inputUsdt'), bs = getEl('inputBs');
     
@@ -300,14 +358,14 @@ const sync = (origin) => {
         const v = getRawNumber(usd.value);
         if(usd.value === "") { bs.value = ""; usdt.value = ""; } 
         else {
-            bs.value = formatVE(v * bcv);
-            usdt.value = formatVE((v * bcv / p2p) + com);
+            bs.value = formatVE(v * bcv); // BCV puro, sin fee
+            usdt.value = formatVE((v * bcv / p2p) + com); // cuánto USDT necesitás vender (con fee) para llegar a ese mismo monto en Bs
         }
     } else if (origin === 'usdt') {
         const v = getRawNumber(usdt.value);
         if(usdt.value === "") { bs.value = ""; usd.value = ""; } 
         else {
-            const neto = v > com ? v - com : 0;
+            const neto = v > com ? v - com : 0; // Binance te liquida v - 0.06
             bs.value = neto > 0 ? formatVE(neto * p2p) : "";
             usd.value = neto > 0 ? formatVE(neto * p2p / bcv) : "";
         }
@@ -315,8 +373,8 @@ const sync = (origin) => {
         const v = getRawNumber(bs.value);
         if(bs.value === "") { usd.value = ""; usdt.value = ""; } 
         else {
-            usd.value = v > 0 ? formatVE(v / bcv) : "";
-            usdt.value = v > 0 ? formatVE((v / p2p) + com) : "";
+            usd.value = v > 0 ? formatVE(v / bcv) : ""; // BCV puro, sin fee
+            usdt.value = v > 0 ? formatVE((v / p2p) + com) : ""; // fee sumado de vuelta
         }
     }
     updateUI();
